@@ -1,0 +1,43 @@
+# Secrets and personal material — never published.
+.env
+.env.local
+.env*.local
+*.pem
+CLAUDE.md
+.claude/
+2026 공모전 청사진 제안서.pdf
+
+# 도시기본계획 source PDF and its preprocessed derivatives.
+# The source is public material published by Incheon and the preprocessed markdown is
+# bulky, so neither is carried here. The human-written summary at
+# data/plan2040_summary.md IS committed — it is a prompt asset, not bulk data.
+Incheon_City_Plan/
+data/plan2040/*
+!data/plan2040/.gitkeep
+
+# Tests stay a local development asset; the published repo carries system code only.
+api/tests/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+.vercel/
+npm-debug.log*
+.pnpm-debug.log*
+
+# Tooling, editors, OS
+.playwright-mcp/
+.vscode/
+.idea/
+.DS_Store
