@@ -2,6 +2,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from app import knowledge
 
@@ -14,6 +15,12 @@ _AXES = (("EI", "E/I"), ("SN", "S/N"), ("TF", "T/F"), ("JP", "J/P"))
 def load_prompt_assets() -> tuple[str, str, str]:
     """Load and cache the three Phase 1 prompt assets."""
     return tuple((_PROMPT_DIR / name).read_text(encoding="utf-8") for name in _PROMPT_NAMES)
+
+
+@lru_cache
+def load_report_prompt(name: Literal["compression.md", "structuring.md"]) -> str:
+    """Load one Phase 3 report prompt without embedding instructions in code."""
+    return (_PROMPT_DIR / name).read_text(encoding="utf-8")
 
 
 @lru_cache

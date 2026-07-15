@@ -1,6 +1,12 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
-from typing import Literal, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from app.report import PersonalReport
+    from app.scoring import TypeResult
 
 
 class Message(TypedDict):
@@ -23,14 +29,18 @@ class Evidence(TypedDict):
 
 
 class Session(TypedDict):
-    """Define the Phase 1 in-memory session shape."""
+    """Define the current in-memory session shape."""
 
     session_id: str
     birth_year: int
     age_2040: int
     messages: list[Message]
     evidence_log: list[Evidence]
-    status: Literal["active", "ended"]
+    status: Literal["active", "ended", "result_ready", "submitted"]
+    type_result: TypeResult | None
+    compressed_transcript: str | None
+    report: PersonalReport | None
+    revision_count: int
     created_at: datetime
 
 
@@ -47,6 +57,10 @@ def create_session(birth_year: int) -> Session:
         "messages": [],
         "evidence_log": [],
         "status": "active",
+        "type_result": None,
+        "compressed_transcript": None,
+        "report": None,
+        "revision_count": 0,
         "created_at": datetime.now(UTC),
     }
     sessions[session_id] = current

@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     interview_target_turns: int = 15
     interview_wrapup_turn: int = 12
     axis_min_evidence: int = 2
+    dev_mode: bool = False
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[2] / ".env",

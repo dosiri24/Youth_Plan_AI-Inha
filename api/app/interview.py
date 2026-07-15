@@ -45,7 +45,7 @@ async def _run(
 
     async for chunk in stream:
         if chunk.usage_metadata is not None:
-            token_usage = _token_usage(chunk.usage_metadata)
+            token_usage = gemini.token_usage(chunk.usage_metadata)
         if chunk.text:
             safe_text = parser.feed(chunk.text)
             if safe_text:
@@ -149,20 +149,6 @@ def _log_issues(session_id: str, turn: int, issues: list[str]) -> None:
             else "evidence_trailer_invalid"
         )
         log_event(event, session_id=session_id, turn=turn, reason=issue)
-
-
-def _token_usage(metadata: object) -> dict[str, int] | None:
-    """Extract integer token counters from final Gemini usage metadata."""
-    names = (
-        "prompt_token_count",
-        "candidates_token_count",
-        "total_token_count",
-        "cached_content_token_count",
-        "tool_use_prompt_token_count",
-        "thoughts_token_count",
-    )
-    usage = {name: value for name in names if type(value := getattr(metadata, name, None)) is int}
-    return usage or None
 
 
 def _sse(event: str, data: dict[str, str]) -> str:

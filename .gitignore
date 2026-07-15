@@ -17,6 +17,7 @@ data/plan2040/*
 
 # Tests stay a local development asset; the published repo carries system code only.
 api/tests/
+web/e2e/
 
 # Python
 .venv/

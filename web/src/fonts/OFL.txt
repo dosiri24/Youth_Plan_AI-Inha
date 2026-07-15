@@ -1,0 +1,9 @@
+Pretendard (PretendardVariable.woff2)
+Copyright (c) 2021 Kil Hyung-jin, with Reserved Font Name Pretendard.
+https://github.com/orioncactus/pretendard
+
+Licensed under the SIL Open Font License, Version 1.1.
+https://openfontlicense.org
+
+This font is bundled with the application under the terms of the OFL, which
+permits bundling and redistribution with software provided this notice is kept.
