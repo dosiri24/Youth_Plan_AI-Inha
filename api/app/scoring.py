@@ -1,17 +1,8 @@
 from math import floor
 from typing import TypedDict
 
+from app.axes import SCORING_AXES, Evidence
 from app.logging import log_event
-
-
-class Evidence(TypedDict):
-    """Define one evidence record consumed by deterministic scoring."""
-
-    axis: str
-    pole: str
-    weight: int
-    text: str
-    turn: int
 
 
 class AxisResult(TypedDict):
@@ -31,18 +22,11 @@ class TypeResult(TypedDict):
     axes: list[AxisResult]
 
 
-_AXES = (
-    ("EI", ("E", "I"), "I"),
-    ("SN", ("S", "N"), "S"),
-    ("TF", ("T", "F"), "F"),
-    ("JP", ("J", "P"), "J"),
-)
-
-
 def score_type(evidence: list[Evidence], session_id: str) -> TypeResult:
     """Score all axes from validated evidence without an LLM call."""
     axes = [
-        _score_axis(axis, poles, default, evidence, session_id) for axis, poles, default in _AXES
+        _score_axis(axis, poles, default, evidence, session_id)
+        for axis, poles, default in SCORING_AXES
     ]
     return {"code": "".join(result["letter"] for result in axes), "axes": axes}
 

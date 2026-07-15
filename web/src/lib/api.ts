@@ -26,20 +26,10 @@ export type TranscriptMessage = {
 export type AxisName = "EI" | "SN" | "TF" | "JP";
 export type AxisLetter = "E" | "I" | "S" | "N" | "T" | "F" | "J" | "P";
 
-export type Evidence = {
-  axis: AxisName;
-  pole: AxisLetter;
-  weight: 1 | 2 | 3;
-  text: string;
-  turn: number;
-};
-
 export type AxisResult = {
   axis: AxisName;
   letter: AxisLetter;
   strength: number;
-  scores: Record<string, number>;
-  evidence: Evidence[];
 };
 
 export type TypeResult = {
@@ -55,16 +45,10 @@ export type SelfInfo = {
   dream_or_job: string;
 };
 
-export type DemandQuote = {
-  text: string;
-  turn: number;
-};
-
 export type Demand = {
   id: string;
   title: string;
   description: string[];
-  quotes: DemandQuote[];
 };
 
 export type AxisDemand = {

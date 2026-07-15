@@ -5,10 +5,10 @@ from pathlib import Path
 from typing import Literal
 
 from app import knowledge
+from app.axes import DISPLAY_AXES
 
 _PROMPT_DIR = Path(__file__).resolve().parents[1] / "prompts"
 _PROMPT_NAMES = ("system.md", "rubric.md", "axes.md")
-_AXES = (("EI", "E/I"), ("SN", "S/N"), ("TF", "T/F"), ("JP", "J/P"))
 
 
 @lru_cache(maxsize=1)
@@ -18,7 +18,7 @@ def load_prompt_assets() -> tuple[str, str, str]:
 
 
 @lru_cache
-def load_report_prompt(name: Literal["compression.md", "structuring.md"]) -> str:
+def load_report_prompt(name: Literal["structuring.md"]) -> str:
     """Load one Phase 3 report prompt without embedding instructions in code."""
     return (_PROMPT_DIR / name).read_text(encoding="utf-8")
 
@@ -27,8 +27,11 @@ def load_report_prompt(name: Literal["compression.md", "structuring.md"]) -> str
 def build_fixed_prefix(age_2040: int) -> str:
     """Build the stable Gemini system instruction for one participant age."""
     system_prompt, rubric, axes = load_prompt_assets()
-    system_with_age = f"{system_prompt}\n\n2040년 추정 나이: {age_2040}세"
-    return "\n\n".join((system_with_age, rubric, axes, knowledge.load_plan_summary()))
+    # Age is the only per-participant value, so it trails the shared assets to widen cache reuse.
+    participant_info = f"[참여자 정보]\n2040년 추정 나이: 약 {age_2040}세"
+    return "\n\n".join(
+        (system_prompt, rubric, axes, knowledge.load_plan_summary(), participant_info)
+    )
 
 
 def _format_operational_instruction(instructions: Sequence[str]) -> str:
@@ -51,7 +54,7 @@ def build_operational_instruction(
     """Build one backend instruction block for coverage and wrap-up guidance."""
     evidence_counts = Counter(item.get("axis") for item in evidence)
     instructions = []
-    for axis, display in _AXES:
+    for axis, display in DISPLAY_AXES:
         count = evidence_counts[axis]
         if count == 0:
             instructions.append(f"아직 {display} 관련 대화가 없음")
@@ -71,8 +74,6 @@ def build_operational_instruction(
     else:
         instructions.append("아직 인터뷰를 마무리하지 말고 대화를 계속할 것")
 
-    if not instructions:
-        return ""
     return _format_operational_instruction(instructions)
 
 
@@ -84,7 +85,7 @@ def append_operational_instruction(
     target_turns: int,
     axis_min_evidence: int,
 ) -> str:
-    """Append backend guidance after a participant utterance when needed."""
+    """Append backend guidance after every participant utterance."""
     instruction = build_operational_instruction(
         evidence,
         turn,
@@ -92,6 +93,4 @@ def append_operational_instruction(
         target_turns,
         axis_min_evidence,
     )
-    if not instruction:
-        return text
     return f"{text}\n{instruction}"

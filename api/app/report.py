@@ -88,6 +88,19 @@ class StructuredReport(StrictModel):
         return self
 
 
+class RevisedDemands(StrictModel):
+    """Accept only one complete ordered replacement of all axis demands."""
+
+    axis_demands: Annotated[list[StructuredAxis], Field(min_length=4, max_length=4)]
+
+    @model_validator(mode="after")
+    def require_axis_order(self) -> Self:
+        """Reject missing, duplicate, or reordered axes before replacement."""
+        if [item.axis for item in self.axis_demands] != ["EI", "SN", "TF", "JP"]:
+            raise ValueError("axis_demands must use EI, SN, TF, JP order")
+        return self
+
+
 class SelfInfo(TypedDict):
     """Keep backend-owned age fields beside model-extracted identity."""
 
@@ -163,27 +176,29 @@ class ResolvedSentence(SelectedSentence):
     text: str
 
 
+class TranscriptMessage(TypedDict):
+    """Keep only model-relevant transcript fields in report calls."""
+
+    turn: int
+    role: Literal["user", "assistant"]
+    text: str
+
+
 @dataclass(frozen=True)
 class Draft:
-    """Keep both report model calls together for final assembly."""
+    """Keep structured model output and usage together for assembly."""
 
-    compressed_transcript: str
     structured: StructuredReport
     token_usage: TokenUsage
 
 
 async def generate_draft(current: session.Session, type_result: TypeResult) -> Draft:
-    """Give structuring the compressed transcript and fixed judgement context."""
-    compressed, compression_usage = await _generate(
-        "compression.md",
-        _serialize_transcript(current["messages"]),
-        response_schema=None,
-    )
-    structured_text, structuring_usage = await _generate(
+    """Give structuring the slim transcript and fixed judgement context."""
+    structured_text, usage = await _generate(
         "structuring.md",
         json.dumps(
             {
-                "compressed_transcript": compressed,
+                "transcript": _serialize_transcript(current["messages"]),
                 "type_result": type_result,
             },
             ensure_ascii=False,
@@ -193,9 +208,8 @@ async def generate_draft(current: session.Session, type_result: TypeResult) -> D
     )
     structured = validate_structure(json.loads(structured_text))
     return Draft(
-        compressed_transcript=compressed,
         structured=structured,
-        token_usage=_merge_usage(compression_usage, structuring_usage),
+        token_usage=usage,
     )
 
 
@@ -242,14 +256,18 @@ async def revise(
     """Limit revision effects to one complete replacement of all demands."""
     current_report = current["report"]
     type_result = current["type_result"]
-    compressed = current["compressed_transcript"]
-    if current_report is None or type_result is None or compressed is None:
+    if current_report is None or type_result is None:
         raise ValueError("result is required before revision")
 
     payload = {
-        "compressed_transcript": compressed,
-        "type_result": type_result,
-        "current_report": current_report,
+        "transcript": _serialize_transcript(current["messages"]),
+        "type_result": {
+            "axes": [
+                {"axis": axis["axis"], "letter": axis["letter"]}
+                for axis in type_result["axes"]
+            ]
+        },
+        "axis_demands": current_report["axis_demands"],
         "selected_sentences": _resolve(current_report, selections),
         "comment": comment,
     }
@@ -259,11 +277,10 @@ async def revise(
             payload,
             ensure_ascii=False,
             separators=(",", ":"),
-            default=_encode_datetime,
         ),
-        response_schema=StructuredReport,
+        response_schema=RevisedDemands,
     )
-    structured = validate_structure(json.loads(structured_text))
+    structured = RevisedDemands.model_validate(json.loads(structured_text))
     revised: PersonalReport = {
         "session_id": current_report["session_id"],
         "self_info": copy.deepcopy(current_report["self_info"]),
@@ -279,7 +296,7 @@ async def revise(
 
 
 async def _generate(
-    prompt_name: Literal["compression.md", "structuring.md"],
+    prompt_name: Literal["structuring.md"],
     contents: str,
     *,
     response_schema: type[BaseModel] | None,
@@ -298,18 +315,16 @@ async def _generate(
     return response.text, gemini.token_usage(response.usage_metadata)
 
 
-def _serialize_transcript(messages: list[session.Message]) -> str:
-    """Keep the unmodified raw transcript available to compression."""
-    return json.dumps(
-        messages,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        default=_encode_datetime,
-    )
+def _serialize_transcript(messages: list[session.Message]) -> list[TranscriptMessage]:
+    """Remove storage-only timestamps from report model input."""
+    return [
+        {"turn": message["turn"], "role": message["role"], "text": message["text"]}
+        for message in messages
+    ]
 
 
 def _axis_demands(
-    structured: StructuredReport,
+    structured: StructuredReport | RevisedDemands,
     type_result: TypeResult,
 ) -> list[AxisDemand]:
     """Prevent Gemini from choosing participant-facing type letters."""
@@ -360,19 +375,25 @@ def _resolve(
     return resolved
 
 
-def _merge_usage(*usages: TokenUsage) -> TokenUsage:
-    """Keep one result event accountable for both sequential model calls."""
-    merged: dict[str, int] = {}
-    for usage in usages:
-        if usage is None:
-            continue
-        for name, value in usage.items():
-            merged[name] = merged.get(name, 0) + value
-    return merged or None
+def slim_type_result(type_result: TypeResult) -> dict[str, object]:
+    """Remove server-only evidence and scores from a participant response."""
+    return {
+        "code": type_result["code"],
+        "axes": [
+            {
+                "axis": axis["axis"],
+                "letter": axis["letter"],
+                "strength": axis["strength"],
+            }
+            for axis in type_result["axes"]
+        ],
+    }
 
 
-def _encode_datetime(value: object) -> str:
-    """Avoid silently serializing values outside backend-owned datetimes."""
-    if isinstance(value, datetime):
-        return value.isoformat()
-    raise TypeError(f"{type(value).__name__} is not JSON serializable")
+def slim_report(personal_report: PersonalReport) -> dict[str, object]:
+    """Remove server-only quotes from a participant response copy."""
+    slimmed = copy.deepcopy(personal_report)
+    for axis in slimmed["axis_demands"]:
+        for demand in axis["demands"]:
+            demand.pop("quotes")
+    return slimmed

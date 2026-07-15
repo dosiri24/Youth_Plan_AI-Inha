@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -45,6 +46,50 @@ type Message = {
 
 type StreamRequest = { type: "start" } | { type: "message"; text: string };
 type InterviewStatus = "active" | "ended" | "aborted";
+
+/** Memoized so a typewriter update only re-renders the bubble whose text changes. */
+const MessageRow = memo(function MessageRow({
+  role,
+  text,
+  showThinking,
+}: {
+  role: Message["role"];
+  text: string;
+  showThinking: boolean;
+}) {
+  return (
+    <article
+      className={
+        role === "user"
+          ? "flex flex-col items-end"
+          : "flex flex-col items-start"
+      }
+    >
+      <p className="mb-1.5 px-1 text-[12px] font-semibold text-muted-foreground">
+        {role === "user" ? "나" : "하늘"}
+      </p>
+      <div
+        className={
+          role === "user"
+            ? "max-w-[84%] rounded-[20px] rounded-tr-md bg-primary px-4 py-3 text-[15px] leading-6 whitespace-pre-wrap text-primary-foreground"
+            : "max-w-[88%] rounded-[20px] rounded-tl-md bg-card px-4 py-3 text-[15px] leading-6 whitespace-pre-wrap text-foreground"
+        }
+      >
+        {text}
+        {showThinking && (
+          <span
+            aria-label="하늘이 답변을 생각하고 있어요"
+            className="flex h-6 items-center gap-1.5 px-0.5"
+          >
+            <span className="size-1.5 animate-pulse rounded-full bg-incheon-gray/45" />
+            <span className="size-1.5 animate-pulse rounded-full bg-incheon-gray/45 [animation-delay:150ms]" />
+            <span className="size-1.5 animate-pulse rounded-full bg-incheon-gray/45 [animation-delay:300ms]" />
+          </span>
+        )}
+      </div>
+    </article>
+  );
+});
 
 /** Client state must disappear when the participant leaves this screen. */
 export function InterviewScreen({
@@ -275,39 +320,14 @@ export function InterviewScreen({
         >
           <div className="space-y-6">
             {messages.map((message) => (
-              <article
+              <MessageRow
                 key={message.id}
-                className={
-                  message.role === "user"
-                    ? "flex flex-col items-end"
-                    : "flex flex-col items-start"
+                role={message.role}
+                text={message.text}
+                showThinking={
+                  message.role === "assistant" && !message.text && thinking
                 }
-              >
-                <p className="mb-1.5 px-1 text-[12px] font-semibold text-muted-foreground">
-                  {message.role === "user" ? "나" : "하늘"}
-                </p>
-                <div
-                  className={
-                    message.role === "user"
-                      ? "max-w-[84%] rounded-[20px] rounded-tr-md bg-primary px-4 py-3 text-[15px] leading-6 whitespace-pre-wrap text-primary-foreground"
-                      : "max-w-[88%] rounded-[20px] rounded-tl-md bg-card px-4 py-3 text-[15px] leading-6 whitespace-pre-wrap text-foreground"
-                  }
-                >
-                  {message.text}
-                  {message.role === "assistant" &&
-                    !message.text &&
-                    thinking && (
-                      <span
-                        aria-label="하늘이 답변을 생각하고 있어요"
-                        className="flex h-6 items-center gap-1.5 px-0.5"
-                      >
-                        <span className="size-1.5 animate-pulse rounded-full bg-incheon-gray/45" />
-                        <span className="size-1.5 animate-pulse rounded-full bg-incheon-gray/45 [animation-delay:150ms]" />
-                        <span className="size-1.5 animate-pulse rounded-full bg-incheon-gray/45 [animation-delay:300ms]" />
-                      </span>
-                    )}
-                </div>
-              </article>
+              />
             ))}
 
             {status === "aborted" && (

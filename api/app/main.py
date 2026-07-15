@@ -133,7 +133,6 @@ async def generate_result(session_id: str) -> dict[str, object]:
     draft = await report.generate_draft(current, type_result)
     personal_report = report.assemble(current, type_result, draft)
     current["type_result"] = type_result
-    current["compressed_transcript"] = draft.compressed_transcript
     current["report"] = personal_report
     current["status"] = "result_ready"
     log_event(
@@ -141,7 +140,10 @@ async def generate_result(session_id: str) -> dict[str, object]:
         session_id=session_id,
         token_usage=draft.token_usage,
     )
-    return {"type_result": type_result, "report": personal_report}
+    return {
+        "type_result": report.slim_type_result(type_result),
+        "report": report.slim_report(personal_report),
+    }
 
 
 @app.post("/api/sessions/{session_id}/result/revise")
@@ -164,7 +166,7 @@ async def revise_result(
         token_usage=token_usage,
         revision_count=current["revision_count"],
     )
-    return revised
+    return report.slim_report(revised)
 
 
 @app.post("/api/sessions/{session_id}/submit", response_model=SubmissionResponse)
@@ -179,9 +181,9 @@ def submit_result(session_id: str) -> SubmissionResponse:
         raise HTTPException(status.HTTP_409_CONFLICT)
 
     submission_id = str(uuid4())
-    current["status"] = "submitted"
+    # Phase 4 persistence must save without a status change, then discard only after success.
     session.discard_session(session_id)
-    log_event("submitted", session_id=session_id, token_usage={})
+    log_event("submitted", session_id=session_id)
     return SubmissionResponse(submission_id=submission_id)
 
 

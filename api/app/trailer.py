@@ -1,13 +1,11 @@
 import json
 from dataclasses import dataclass
-from typing import TypeAlias
 
-Evidence: TypeAlias = dict[str, str | int]
+from app.axes import AXIS_POLES, EVIDENCE_WEIGHTS, Evidence
 
 _EVIDENCE_MARKER = "[[EVIDENCE]]"
 _END_MARKER = "[[END_INTERVIEW]]"
 _ABORT_MARKER = "[[ABORT_INTERVIEW]]"
-_POLES = {"EI": {"E", "I"}, "SN": {"S", "N"}, "TF": {"T", "F"}, "JP": {"J", "P"}}
 
 
 @dataclass(frozen=True)
@@ -120,9 +118,9 @@ def _validate_item(item: object, turn: int) -> Evidence | None:
     model_turn = item.get("turn")
     if not isinstance(axis, str) or not isinstance(pole, str):
         return None
-    if axis not in _POLES or pole not in _POLES[axis]:
+    if axis not in AXIS_POLES or pole not in AXIS_POLES[axis]:
         return None
-    if type(weight) is not int or weight not in {1, 2, 3}:
+    if type(weight) is not int or weight not in EVIDENCE_WEIGHTS:
         return None
     if not isinstance(text, str) or not text.strip():
         return None

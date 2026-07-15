@@ -29,13 +29,14 @@ type StartScreenProps = {
 /** The entry explains why participation matters before requesting verification. */
 function StartScreen({ onError, onStart }: StartScreenProps) {
   const [birthYear, setBirthYear] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [pending, setPending] = useState(false);
   const valid = isValidBirthYear(birthYear);
   const invalid = birthYear.length > 0 && !valid;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!valid || pending) return;
+    if (!valid || !agreed || pending) return;
 
     setPending(true);
     try {
@@ -93,15 +94,39 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
         >
           1900년부터 2026년 사이로 입력해 주세요.
         </p>
+        <div className="mt-4 rounded-2xl bg-muted/60 p-4">
+          <p className="text-[13px] leading-6 text-muted-foreground">
+            유스플랜AI는 인터뷰 진행과 정책 분석을 위해 출생연도, 인터뷰 대화
+            내용, 대화 중 언급한 별명·거주 지역·꿈 또는 직업을 수집해요. 수집한
+            내용은 인천시 청년정책 연구 자료로만 쓰고, 시범운영이 끝나면
+            파기해요.
+          </p>
+          <div className="mt-3 flex items-start gap-2.5">
+            <input
+              id="consent"
+              checked={agreed}
+              className="mt-0.5 size-5 shrink-0 accent-primary"
+              disabled={pending}
+              onChange={(event) => setAgreed(event.target.checked)}
+              type="checkbox"
+            />
+            <label
+              className="text-[14px] leading-6 font-semibold text-foreground"
+              htmlFor="consent"
+            >
+              안내를 읽었고 개인정보 수집·이용에 동의합니다.
+            </label>
+          </div>
+        </div>
         <Button
-          className="mt-5 h-14 w-full rounded-2xl bg-verify text-base font-bold text-white hover:bg-verify/90"
-          disabled={!valid || pending}
+          className={`mt-4 h-14 w-full rounded-2xl text-base font-bold ${agreed ? "bg-verify text-white hover:bg-verify/90" : "bg-muted text-muted-foreground"}`}
+          disabled={!agreed || !valid || pending}
           type="submit"
         >
           {pending ? "본인인증을 확인하고 있어요" : "본인인증하고 인터뷰하기"}
         </Button>
         <p className="mt-2.5 text-center text-[12px] leading-5 text-muted-foreground">
-          현재는 개발 중으로 본인인증이 필요 없습니다.
+          시연용 서비스라 실제 본인인증 절차 없이 진행돼요.
         </p>
       </form>
     </section>

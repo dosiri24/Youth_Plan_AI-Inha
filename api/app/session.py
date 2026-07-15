@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal, TypedDict
 from uuid import uuid4
 
+from app.axes import Evidence
+
 if TYPE_CHECKING:
     from app.report import PersonalReport
     from app.scoring import TypeResult
@@ -18,16 +20,6 @@ class Message(TypedDict):
     timestamp: datetime
 
 
-class Evidence(TypedDict):
-    """Define one validated evidence record."""
-
-    axis: str
-    pole: str
-    weight: int
-    text: str
-    turn: int
-
-
 class Session(TypedDict):
     """Define the current in-memory session shape."""
 
@@ -38,7 +30,6 @@ class Session(TypedDict):
     evidence_log: list[Evidence]
     status: Literal["active", "ended", "result_ready", "submitted"]
     type_result: TypeResult | None
-    compressed_transcript: str | None
     report: PersonalReport | None
     revision_count: int
     created_at: datetime
@@ -58,7 +49,6 @@ def create_session(birth_year: int) -> Session:
         "evidence_log": [],
         "status": "active",
         "type_result": None,
-        "compressed_transcript": None,
         "report": None,
         "revision_count": 0,
         "created_at": datetime.now(UTC),

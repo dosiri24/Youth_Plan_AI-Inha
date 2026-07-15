@@ -28,12 +28,8 @@ type ResultScreenProps = {
 
 type ResultStep = "type" | "report" | "revise";
 
-/** Long enough to see the bar reach 100%, short enough not to feel like another wait. */
-const DONE_HOLD_MS = 500;
-
 type ResultHeaderProps = {
   description: string;
-  step: string;
   title: string;
   backDisabled?: boolean;
   onBack?: () => void;
@@ -44,7 +40,6 @@ function ResultHeader({
   backDisabled = false,
   description,
   onBack,
-  step,
   title,
 }: ResultHeaderProps) {
   return (
@@ -60,12 +55,11 @@ function ResultHeader({
           이전
         </Button>
       )}
-      <p
-        className={`${onBack ? "mt-3" : ""} text-[13px] font-bold text-primary`}
+      <h1
+        className={`${onBack ? "mt-3" : ""} text-[27px] font-bold tracking-[-0.03em]`}
       >
-        {step}
-      </p>
-      <h1 className="mt-2 text-[27px] font-bold tracking-[-0.03em]">{title}</h1>
+        {title}
+      </h1>
       <p className="mt-2 text-[15px] leading-6 text-muted-foreground">
         {description}
       </p>
@@ -140,9 +134,9 @@ function Submitted({
 
 /** The controller retains one fetched result while its three views change. */
 export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
-  const [typeResult, setTypeResult] = useState<TypeResult | null>(null);
+  const [result, setResult] = useState<ResultResponse | null>(null);
   const [report, setReport] = useState<PersonalReport | null>(null);
-  const [ready, setReady] = useState<ResultResponse | null>(null);
+  const [revealed, setRevealed] = useState(false);
   const [step, setStep] = useState<ResultStep>("type");
   const [revising, setRevising] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -156,13 +150,9 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
     startedRef.current = true;
 
     void generateResult(sessionId)
-      .then((result) => {
-        // Letting the bar finish before the swap keeps the wait from ending mid-stride.
-        setReady(result);
-        window.setTimeout(() => {
-          setTypeResult(result.type_result);
-          setReport(result.report);
-        }, DONE_HOLD_MS);
+      .then((fetched) => {
+        setResult(fetched);
+        setReport(fetched.report);
       })
       .catch(() => onError());
   }, [onError, sessionId]);
@@ -196,15 +186,13 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
 
   const share = async () => {
     const card = cardRef.current;
-    if (!card || !typeResult || cardAction !== null) return;
+    if (!card || !result || cardAction !== null) return;
 
     setCardAction("share");
     try {
-      await shareTypeCard(card, typeResult.code);
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        onError();
-      }
+      await shareTypeCard(card, result.type_result.code);
+    } catch {
+      // Share/save failure must not discard the result; only this attempt ends (PLAN 9.3, D1).
     } finally {
       setCardAction(null);
     }
@@ -212,19 +200,24 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
 
   const download = async () => {
     const card = cardRef.current;
-    if (!card || !typeResult || cardAction !== null) return;
+    if (!card || !result || cardAction !== null) return;
 
     setCardAction("download");
     try {
-      await downloadTypeCard(card, typeResult.code);
+      await downloadTypeCard(card, result.type_result.code);
     } catch {
-      onError();
+      // Share/save failure must not discard the result; only this attempt ends (PLAN 9.3, D1).
     } finally {
       setCardAction(null);
     }
   };
 
-  if (!typeResult || !report) return <ResultLoading done={ready !== null} />;
+  if (!result || !report || !revealed)
+    return (
+      <ResultLoading done={result !== null} onDone={() => setRevealed(true)} />
+    );
+
+  const typeResult = result.type_result;
 
   if (submissionId) {
     return (
@@ -246,8 +239,7 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background"
       >
         <ResultHeader
-          description="먼저 내가 바라는 도시 유형과 네 축의 판정 이유를 확인해 보세요."
-          step="결과 1 / 3"
+          description="대화를 바탕으로 판정한 결과예요."
           title="내 유형 확인"
         />
         <div className="space-y-10 px-5 pt-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
@@ -283,9 +275,8 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background"
       >
         <ResultHeader
-          description="인터뷰에서 정리된 이야기와 인천에 바라는 변화를 확인해 주세요."
+          description="내 이야기가 잘 정리됐는지 확인해 주세요."
           onBack={() => setStep("type")}
-          step="결과 2 / 3"
           title="내 이야기와 요구 확인"
         />
         <div className="space-y-12 px-5 pt-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
@@ -337,9 +328,8 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
     >
       <ResultHeader
         backDisabled={revising}
-        description="고른 문장과 의견을 바탕으로 네 축의 요구를 모두 다시 정리해요."
+        description="고른 문장과 의견으로 네 축의 요구를 다시 정리해요."
         onBack={() => setStep("report")}
-        step="결과 3 / 3"
         title="요구 수정"
       />
       <div className="px-5 pt-6 pb-[max(2rem,env(safe-area-inset-bottom))]">

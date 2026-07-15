@@ -24,23 +24,37 @@ export function RevisionForm({
   revising,
   onRevise,
 }: RevisionFormProps) {
-  const [selections, setSelections] = useState<RevisionSelection[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [comment, setComment] = useState("");
   const canRevise =
-    selections.length > 0 && comment.trim().length > 0 && !revising;
+    selectedKeys.size > 0 && comment.trim().length > 0 && !revising;
 
-  const toggle = (selection: RevisionSelection) => {
-    const key = selectionKey(selection);
-    setSelections((current) =>
-      current.some((item) => selectionKey(item) === key)
-        ? current.filter((item) => selectionKey(item) !== key)
-        : [...current, selection],
-    );
+  const toggle = (key: string) => {
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canRevise) return;
+
+    const selections = report.axis_demands.flatMap((axisDemand) =>
+      axisDemand.demands.flatMap((demand) =>
+        demand.description
+          .map((_, sentenceIndex) => ({
+            axis: axisDemand.axis,
+            demand_id: demand.id,
+            sentence_index: sentenceIndex,
+          }))
+          .filter((selection) => selectedKeys.has(selectionKey(selection))),
+      ),
+    );
 
     await onRevise(selections, comment.trim());
   };
@@ -124,9 +138,7 @@ export function RevisionForm({
                             sentence_index: sentenceIndex,
                           };
                           const key = selectionKey(selection);
-                          const checked = selections.some(
-                            (item) => selectionKey(item) === key,
-                          );
+                          const checked = selectedKeys.has(key);
 
                           return (
                             <label
@@ -140,7 +152,7 @@ export function RevisionForm({
                               <input
                                 checked={checked}
                                 className="mt-1 size-4 shrink-0 accent-incheon-blue"
-                                onChange={() => toggle(selection)}
+                                onChange={() => toggle(key)}
                                 type="checkbox"
                               />
                               <span className="text-[14px] leading-6">
@@ -181,7 +193,7 @@ export function RevisionForm({
               value={comment}
             />
             <p className="mt-3 text-[12px] font-semibold text-muted-foreground">
-              선택한 문장 {selections.length}개
+              선택한 문장 {selectedKeys.size}개
             </p>
             <Button
               className="mt-4 h-14 w-full rounded-2xl text-[15px] font-bold"

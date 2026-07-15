@@ -14,23 +14,23 @@ type AxisInfo = {
 export const AXIS_INFO: Record<AxisName, AxisInfo> = {
   EI: {
     title: "에너지의 방향",
-    left: { letter: "E", label: "개방·교류·활력" },
-    right: { letter: "I", label: "정주·정온·내밀" },
+    left: { letter: "E", label: "북적이고 열린 도시" },
+    right: { letter: "I", label: "조용하고 아늑한 도시" },
   },
   SN: {
     title: "시선의 대상",
-    left: { letter: "S", label: "현실·실용·기존 자원" },
-    right: { letter: "N", label: "미래·혁신·첨단" },
+    left: { letter: "S", label: "지금 있는 것을 살리는" },
+    right: { letter: "N", label: "새로운 것에 도전하는" },
   },
   TF: {
     title: "우선하는 가치",
-    left: { letter: "T", label: "효율·기능·경쟁력" },
-    right: { letter: "F", label: "관계·돌봄·정서" },
+    left: { letter: "T", label: "효율적으로 굴러가는" },
+    right: { letter: "F", label: "서로 챙기고 보듬는" },
   },
   JP: {
     title: "도시의 운영 방식",
-    left: { letter: "J", label: "계획·정돈" },
-    right: { letter: "P", label: "유연·혼합·자생" },
+    left: { letter: "J", label: "계획대로 정돈된" },
+    right: { letter: "P", label: "자유롭게 섞이는" },
   },
 };
 
