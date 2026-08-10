@@ -99,7 +99,6 @@ function DemandOverview({ report }: ReportOverviewProps) {
               {AXIS_INFO[axisDemand.axis].title}
             </p>
             <h3 className="mt-1.5 text-[18px] font-bold">
-              {axisDemand.letter} ·{" "}
               {getPoleLabel(axisDemand.axis, axisDemand.letter)}
             </h3>
 

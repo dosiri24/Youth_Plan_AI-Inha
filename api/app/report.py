@@ -8,11 +8,15 @@ from google.genai import types
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app import gemini, session
+from app.axes import AXIS_NAMES
 from app.config import get_settings
 from app.prompts import load_report_prompt as load_prompt
 from app.scoring import TypeResult
 
-AxisName = Literal["EI", "SN", "TF", "JP"]
+AxisName = Literal[*AXIS_NAMES]
+# The fixed vocabulary mirrored by structuring.md; test_report pins the two together.
+TOPICS = ("일자리", "주거", "교통", "문화", "환경", "돌봄", "안전", "교육", "상권")
+Topic = Literal[*TOPICS]
 Sentence = Annotated[str, Field(min_length=1)]
 TokenUsage = dict[str, int] | None
 
@@ -45,6 +49,7 @@ class StructuredDemand(StrictModel):
     id: Annotated[str, Field(min_length=1)]
     title: Annotated[str, Field(min_length=1)]
     description: Annotated[list[Sentence], Field(min_length=1)]
+    topics: Annotated[list[Topic], Field(min_length=1, max_length=3)]
     quotes: Annotated[list[StructuredQuote], Field(min_length=1, max_length=2)]
 
 
@@ -81,10 +86,10 @@ class StructuredReport(StrictModel):
     @model_validator(mode="after")
     def require_axis_order(self) -> Self:
         """Reject missing, duplicate, or reordered axes before assembly."""
-        if [item.axis for item in self.axis_reasons] != ["EI", "SN", "TF", "JP"]:
-            raise ValueError("axis_reasons must use EI, SN, TF, JP order")
-        if [item.axis for item in self.axis_demands] != ["EI", "SN", "TF", "JP"]:
-            raise ValueError("axis_demands must use EI, SN, TF, JP order")
+        if [item.axis for item in self.axis_reasons] != list(AXIS_NAMES):
+            raise ValueError("axis_reasons must use the contracted axis order")
+        if [item.axis for item in self.axis_demands] != list(AXIS_NAMES):
+            raise ValueError("axis_demands must use the contracted axis order")
         return self
 
 
@@ -96,8 +101,8 @@ class RevisedDemands(StrictModel):
     @model_validator(mode="after")
     def require_axis_order(self) -> Self:
         """Reject missing, duplicate, or reordered axes before replacement."""
-        if [item.axis for item in self.axis_demands] != ["EI", "SN", "TF", "JP"]:
-            raise ValueError("axis_demands must use EI, SN, TF, JP order")
+        if [item.axis for item in self.axis_demands] != list(AXIS_NAMES):
+            raise ValueError("axis_demands must use the contracted axis order")
         return self
 
 
@@ -124,6 +129,7 @@ class Demand(TypedDict):
     id: str
     title: str
     description: list[str]
+    topics: list[str]
     quotes: list[Quote]
 
 
@@ -176,14 +182,6 @@ class ResolvedSentence(SelectedSentence):
     text: str
 
 
-class TranscriptMessage(TypedDict):
-    """Keep only model-relevant transcript fields in report calls."""
-
-    turn: int
-    role: Literal["user", "assistant"]
-    text: str
-
-
 @dataclass(frozen=True)
 class Draft:
     """Keep structured model output and usage together for assembly."""
@@ -198,7 +196,7 @@ async def generate_draft(current: session.Session, type_result: TypeResult) -> D
         "structuring.md",
         json.dumps(
             {
-                "transcript": _serialize_transcript(current["messages"]),
+                "transcript": session.serialize_transcript(current["messages"]),
                 "type_result": type_result,
             },
             ensure_ascii=False,
@@ -260,7 +258,7 @@ async def revise(
         raise ValueError("result is required before revision")
 
     payload = {
-        "transcript": _serialize_transcript(current["messages"]),
+        "transcript": session.serialize_transcript(current["messages"]),
         "type_result": {
             "axes": [
                 {"axis": axis["axis"], "letter": axis["letter"]}
@@ -299,12 +297,12 @@ async def _generate(
     prompt_name: Literal["structuring.md"],
     contents: str,
     *,
-    response_schema: type[BaseModel] | None,
+    response_schema: type[BaseModel],
 ) -> tuple[str, TokenUsage]:
     """Keep every report instruction in its mandated external asset."""
     config = types.GenerateContentConfig(
         system_instruction=load_prompt(prompt_name),
-        response_mime_type="application/json" if response_schema is not None else None,
+        response_mime_type="application/json",
         response_schema=response_schema,
     )
     response = await gemini.get_client().aio.models.generate_content(
@@ -313,14 +311,6 @@ async def _generate(
         config=config,
     )
     return response.text, gemini.token_usage(response.usage_metadata)
-
-
-def _serialize_transcript(messages: list[session.Message]) -> list[TranscriptMessage]:
-    """Remove storage-only timestamps from report model input."""
-    return [
-        {"turn": message["turn"], "role": message["role"], "text": message["text"]}
-        for message in messages
-    ]
 
 
 def _axis_demands(
@@ -391,9 +381,10 @@ def slim_type_result(type_result: TypeResult) -> dict[str, object]:
 
 
 def slim_report(personal_report: PersonalReport) -> dict[str, object]:
-    """Remove server-only quotes from a participant response copy."""
+    """Remove server-only quotes and topic tags from a participant response copy."""
     slimmed = copy.deepcopy(personal_report)
     for axis in slimmed["axis_demands"]:
         for demand in axis["demands"]:
             demand.pop("quotes")
+            demand.pop("topics")
     return slimmed

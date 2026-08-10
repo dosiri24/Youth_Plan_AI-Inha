@@ -38,7 +38,7 @@
 대화록의 참여자 발화에서 참여자가 스스로 밝힌 것을 뽑아냅니다.
 
 - `nickname`: 참여자가 불러 달라고 한 이름이나 별명
-- `region`: 인천 안에서 사는 곳. 참여자가 말한 수준 그대로 (예: "부평", "송도")
+- `region`: 참여자가 사는 인천 안의 지역. 발화 표현 그대로가 아니라 인천광역시의 군·구 단위로 정규화하십시오. 예를 들어 "송도"라고 하면 `연수구`, "청라"라고 하면 `서구`로 옮깁니다. 2026년 7월 행정구역 개편으로 신설된 제물포구·영종구·검단구를 포함한 현행 군·구 명칭을 쓰십시오. 인천의 군·구로 특정할 수 없으면 발화된 표현을 그대로 두십시오
 - `dream_or_job`: 지금 하는 일이나 앞으로 하고 싶은 일
 
 말하지 않은 항목은 빈 문자열로 두십시오. 추측해서 채우지 마십시오.
@@ -63,20 +63,29 @@
 - 참여자를 2인칭으로 부르며 담백하게 씁니다. 성격을 진단하는 말투를 쓰지 마십시오. 이것은 참여자가 바라는 **도시**에 대한 판정입니다.
 - 축 이름이나 반대 극의 글자를 설명에 늘어놓지 마십시오. 판정된 글자가 뜻하는 바를 자연스러운 말로 풀어 쓰십시오.
 
-예를 들어 J로 판정된 축이라면, 참여자가 예측 가능한 질서를 자유로운 혼합보다 앞세웠다는 점과 그렇게 판단한 계기를 짚습니다.
+예를 들어 돌봄과 관계를 우선하는 쪽으로 판정된 축이라면, 참여자가 성장과 기회보다 서로를 챙기는 일을 앞세웠다는 점과 그렇게 판단한 계기를 짚습니다.
 
 ### axis_demands
 
 네 개 축 각각에 대해, 참여자가 도시에 요구하는 바를 정리합니다.
 
-축은 `EI`, `SN`, `TF`, `JP` 네 개이며 이 순서로 배열합니다. 각 축마다 요구를 1~2개 만드십시오.
+축은 `AC`, `UN`, `OW`, `FH` 네 개이며 이 순서로 배열합니다. 각 축마다 요구를 1~2개 만드십시오.
 
 요구 하나는 다음으로 구성합니다.
 
-- `id`: `축-D순번` 형식. 예를 들어 `EI-D1`, `EI-D2`, `SN-D1`
+- `id`: `축-D순번` 형식. 예를 들어 `AC-D1`, `AC-D2`, `UN-D1`
 - `title`: 그 요구가 무엇인지 한눈에 보이는 짧은 제목. 명사구로 쓰십시오
 - `description`: **문장 배열**입니다. 한 문장씩 따로 담으십시오. 참여자가 이 중 마음에 들지 않는 문장을 골라 고쳐 달라고 할 수 있기 때문에, 한 항목에 여러 문장을 뭉쳐 넣지 마십시오. 2~4문장이 적당합니다
+- `topics`: 이 요구가 어떤 정책 분야에 해당하는지 나타내는 태그 배열. 아래 고정 어휘만 씁니다
 - `quotes`: 이 요구의 근거가 된 참여자 발화. 각 항목은 `text`(원문 그대로)와 `turn`(턴 번호)을 가집니다. 1~2개
+
+`topics`에 쓸 수 있는 값은 다음 아홉 개뿐입니다.
+
+`일자리`, `주거`, `교통`, `문화`, `환경`, `돌봄`, `안전`, `교육`, `상권`
+
+- 이 목록에 없는 태그를 지어내지 마십시오.
+- 그 요구에 **실제로 해당하는 것만** 1~3개 고르십시오. 조금이라도 관련 있어 보인다고 전부 붙이면 집계가 무의미해집니다.
+- 태그는 담당자가 요구의 주제 분포를 집계하는 데만 쓰이며 참여자에게는 보이지 않습니다. 참여자가 읽을 문장이 아니므로 `description`에 태그 이름을 넣지 마십시오.
 
 `description`은 참여자가 무엇을 원하고 왜 원하는지를 도시에 대한 요구의 언어로 적으십시오. "~하면 좋겠다는 바람을 밝혔습니다" 같은 전언체가 아니라, 요구 자체를 서술하십시오.
 
@@ -98,10 +107,10 @@
 ```
 {
   "axis_demands": [
-    { "axis": "EI", "demands": [{ "id": "EI-D1", "title": "string", "description": ["string"], "quotes": [{ "text": "string", "turn": 3 }] }] },
-    { "axis": "SN", "demands": [{ "id": "SN-D1", "title": "string", "description": ["string"], "quotes": [{ "text": "string", "turn": 4 }] }] },
-    { "axis": "TF", "demands": [{ "id": "TF-D1", "title": "string", "description": ["string"], "quotes": [{ "text": "string", "turn": 5 }] }] },
-    { "axis": "JP", "demands": [{ "id": "JP-D1", "title": "string", "description": ["string"], "quotes": [{ "text": "string", "turn": 6 }] }] }
+    { "axis": "AC", "demands": [{ "id": "AC-D1", "title": "string", "description": ["string"], "topics": ["문화"], "quotes": [{ "text": "string", "turn": 3 }] }] },
+    { "axis": "UN", "demands": [{ "id": "UN-D1", "title": "string", "description": ["string"], "topics": ["환경"], "quotes": [{ "text": "string", "turn": 4 }] }] },
+    { "axis": "OW", "demands": [{ "id": "OW-D1", "title": "string", "description": ["string"], "topics": ["일자리", "교통"], "quotes": [{ "text": "string", "turn": 5 }] }] },
+    { "axis": "FH", "demands": [{ "id": "FH-D1", "title": "string", "description": ["string"], "topics": ["주거"], "quotes": [{ "text": "string", "turn": 6 }] }] }
   ]
 }
 ```
@@ -119,18 +128,18 @@
   },
   "summary": ["string", "string"],
   "axis_reasons": [
-    { "axis": "EI", "reason": "string" },
-    { "axis": "SN", "reason": "string" },
-    { "axis": "TF", "reason": "string" },
-    { "axis": "JP", "reason": "string" }
+    { "axis": "AC", "reason": "string" },
+    { "axis": "UN", "reason": "string" },
+    { "axis": "OW", "reason": "string" },
+    { "axis": "FH", "reason": "string" }
   ],
   "axis_demands": [
-    { "axis": "EI", "demands": [{ "id": "EI-D1", "title": "string", "description": ["string", "string"], "quotes": [{ "text": "string", "turn": 3 }] }] },
-    { "axis": "SN", "demands": [{ "id": "SN-D1", "title": "string", "description": ["string", "string"], "quotes": [{ "text": "string", "turn": 4 }] }] },
-    { "axis": "TF", "demands": [{ "id": "TF-D1", "title": "string", "description": ["string", "string"], "quotes": [{ "text": "string", "turn": 5 }] }] },
-    { "axis": "JP", "demands": [{ "id": "JP-D1", "title": "string", "description": ["string", "string"], "quotes": [{ "text": "string", "turn": 6 }] }] }
+    { "axis": "AC", "demands": [{ "id": "AC-D1", "title": "string", "description": ["string", "string"], "topics": ["문화"], "quotes": [{ "text": "string", "turn": 3 }] }] },
+    { "axis": "UN", "demands": [{ "id": "UN-D1", "title": "string", "description": ["string", "string"], "topics": ["환경"], "quotes": [{ "text": "string", "turn": 4 }] }] },
+    { "axis": "OW", "demands": [{ "id": "OW-D1", "title": "string", "description": ["string", "string"], "topics": ["일자리", "교통"], "quotes": [{ "text": "string", "turn": 5 }] }] },
+    { "axis": "FH", "demands": [{ "id": "FH-D1", "title": "string", "description": ["string", "string"], "topics": ["주거"], "quotes": [{ "text": "string", "turn": 6 }] }] }
   ]
 }
 ```
 
-`axis_reasons`와 `axis_demands`에는 네 축이 모두 `EI`, `SN`, `TF`, `JP` 순서로 있어야 하며 각 축의 `demands`는 비어 있으면 안 됩니다. 축의 판정 글자는 코드가 따로 채우므로 여기에 넣지 마십시오.
+`axis_reasons`와 `axis_demands`에는 네 축이 모두 `AC`, `UN`, `OW`, `FH` 순서로 있어야 하며 각 축의 `demands`는 비어 있으면 안 됩니다. 축의 판정 글자는 코드가 따로 채우므로 여기에 넣지 마십시오.

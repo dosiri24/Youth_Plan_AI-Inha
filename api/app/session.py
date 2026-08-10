@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal, TypedDict
 from uuid import uuid4
@@ -18,6 +19,14 @@ class Message(TypedDict):
     role: Literal["user", "assistant"]
     text: str
     timestamp: datetime
+
+
+class TranscriptMessage(TypedDict):
+    """Define one transcript message stripped of storage-only fields."""
+
+    turn: int
+    role: Literal["user", "assistant"]
+    text: str
 
 
 class Session(TypedDict):
@@ -85,6 +94,14 @@ def save_turn(current: Session, turn: int, user_text: str, assistant_text: str) 
             _message(turn, "assistant", assistant_text),
         )
     )
+
+
+def serialize_transcript(messages: Sequence[Message]) -> list[TranscriptMessage]:
+    """Remove storage-only timestamps from every model-facing transcript."""
+    return [
+        {"turn": message["turn"], "role": message["role"], "text": message["text"]}
+        for message in messages
+    ]
 
 
 def _message(turn: int, role: Literal["user", "assistant"], text: str) -> Message:

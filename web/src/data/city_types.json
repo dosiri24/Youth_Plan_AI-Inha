@@ -1,82 +1,98 @@
 [
   {
-    "code": "ESTJ",
-    "nickname": "관문도시의 설계자",
-    "description": "공항과 항만이라는 인천의 무기를 제대로 벼려, 세계로 열린 도시를 질서 있게 만들고 싶어 합니다."
+    "code": "AUOF",
+    "nickname": "내일을 파는 밤거리의 창업가",
+    "description": "밤늦게까지 사람이 오가는 거리에서 아무도 해 보지 않은 일을 시작할 수 있는 인천을 바랍니다.",
+    "image": "/city-types/AUOF.svg"
   },
   {
-    "code": "ESTP",
-    "nickname": "원도심을 깨우는 승부사",
-    "description": "이미 있는 거리와 상권이 규제에 갇히지 않고 스스로 살아나, 인천이 다시 붐비기를 바랍니다."
+    "code": "AUOH",
+    "nickname": "발길 잦은 옛 상가의 승부사",
+    "description": "오래된 건물을 밀어내지 않고 고쳐 쓰면서도 그 거리에 손님이 끊이지 않는 인천을 바랍니다.",
+    "image": "/city-types/AUOH.svg"
   },
   {
-    "code": "ESFJ",
-    "nickname": "모두를 초대하는 이웃",
-    "description": "잘 정돈된 광장과 축제에 낯선 사람도 이웃도 함께 모이는, 품이 넓은 인천을 그립니다."
+    "code": "AUWF",
+    "nickname": "한밤에도 사람을 품는 새 도시지기",
+    "description": "늦은 밤 혼자여도 기댈 곳이 있도록 도심의 돌봄이 새로운 방식으로 열려 있는 인천을 바랍니다.",
+    "image": "/city-types/AUWF.svg"
   },
   {
-    "code": "ESFP",
-    "nickname": "골목 축제의 주인공",
-    "description": "정해진 각본 없이 골목마다 사람이 모이고 흥이 번지는, 살아 있는 인천을 원합니다."
+    "code": "AUWH",
+    "nickname": "떠들썩한 옛 골목의 오지랖 이웃",
+    "description": "늘 사람 소리가 나는 골목에서 오래 알고 지낸 이웃과 단골 가게가 그대로 남는 인천을 바랍니다.",
+    "image": "/city-types/AUWH.svg"
   },
   {
-    "code": "ENTJ",
-    "nickname": "미래도시의 지휘자",
-    "description": "세계의 기업과 기술이 모여드는 스마트 국제도시를, 흔들림 없는 계획으로 세우고 싶어 합니다."
+    "code": "ANOF",
+    "nickname": "바다를 놀이터로 바꾸는 모험가",
+    "description": "막혀 있던 바닷가가 사람으로 붐비고 거기서 새로운 일이 시작되는 인천을 바랍니다.",
+    "image": "/city-types/ANOF.svg"
   },
   {
-    "code": "ENTP",
-    "nickname": "판을 뒤집는 실험가",
-    "description": "아무도 하지 않은 것을 마음껏 시도할 수 있는 도시라야 인천이 살아남는다고 믿습니다."
+    "code": "ANOH",
+    "nickname": "옛 포구를 들썩이게 한 뱃사람",
+    "description": "오래된 포구와 어시장의 모습을 그대로 두고도 사람이 모이고 벌이가 되는 인천을 바랍니다.",
+    "image": "/city-types/ANOH.svg"
   },
   {
-    "code": "ENFJ",
-    "nickname": "함께 미래로 이끄는 사람",
-    "description": "새로운 인천으로 나아가되 누구도 뒤에 남겨두지 않도록, 그 길을 촘촘히 설계하고자 합니다."
+    "code": "ANWF",
+    "nickname": "모두의 물가를 새로 여는 잔치꾼",
+    "description": "누구나 물가에 닿을 수 있게 길을 새로 내고 거기서 다 같이 어울리는 인천을 바랍니다.",
+    "image": "/city-types/ANWF.svg"
   },
   {
-    "code": "ENFP",
-    "nickname": "다채로움을 부르는 몽상가",
-    "description": "다른 곳에서 온 다양한 사람들이 각자의 방식으로 새로운 것을 피워내는 인천을 꿈꿉니다."
+    "code": "ANWH",
+    "nickname": "북적이는 갯마을의 정 많은 토박이",
+    "description": "바닷가 동네의 왁자한 분위기와 오래 쌓인 인심이 그대로 이어지는 인천을 바랍니다.",
+    "image": "/city-types/ANWH.svg"
   },
   {
-    "code": "ISTJ",
-    "nickname": "생활을 다지는 관리자",
-    "description": "화려한 신도시보다, 지금 사는 동네의 도로와 학교가 제때 제대로 갖춰지기를 바랍니다."
+    "code": "CUOF",
+    "nickname": "한적한 신도시의 조용한 야심가",
+    "description": "붐비지 않는 동네에 살면서도 새 기술과 좋은 일자리가 가까이 있는 인천을 바랍니다.",
+    "image": "/city-types/CUOF.svg"
   },
   {
-    "code": "ISTP",
-    "nickname": "조용한 실용주의자",
-    "description": "요란한 개발도 과한 간섭도 없이, 있는 것이 제 몫을 하는 담백한 인천을 좋아합니다."
+    "code": "CUOH",
+    "nickname": "한산한 원도심의 알뜰한 살림꾼",
+    "description": "번잡하지 않은 거리에서 이미 있는 건물과 상권이 알뜰하게 쓰이는 인천을 바랍니다.",
+    "image": "/city-types/CUOH.svg"
   },
   {
-    "code": "ISFJ",
-    "nickname": "동네를 지키는 파수꾼",
-    "description": "오래 쌓인 동네의 정과 얼굴들이 개발에 밀려나지 않도록, 차분히 지켜내고 싶어 합니다."
+    "code": "CUWF",
+    "nickname": "느긋한 도심의 미래 돌봄지기",
+    "description": "서두르지 않아도 되는 동네 안에서 돌봄과 복지가 새로운 방식으로 닿는 인천을 바랍니다.",
+    "image": "/city-types/CUWF.svg"
   },
   {
-    "code": "ISFP",
-    "nickname": "골목의 온기를 아는 사람",
-    "description": "낡은 골목과 단골 가게에서 자연스레 이어지는 관계가, 인천에 오래 남기를 바랍니다."
+    "code": "CUWH",
+    "nickname": "조용한 골목의 오랜 단골",
+    "description": "익숙한 거리와 단골 가게, 오래 본 이웃이 그대로 남아 있는 조용한 인천을 바랍니다.",
+    "image": "/city-types/CUWH.svg"
   },
   {
-    "code": "INTJ",
-    "nickname": "고요한 미래의 설계자",
-    "description": "붐비지 않아도 기술이 일상을 정확하게 받쳐 주는, 조용하고 똑똑한 인천을 그립니다."
+    "code": "CNOF",
+    "nickname": "천천히 미래를 짓는 숲속 일꾼",
+    "description": "나무와 물이 가까운 곳에서 느리게 살면서도 새로운 일을 벌일 수 있는 인천을 바랍니다.",
+    "image": "/city-types/CNOF.svg"
   },
   {
-    "code": "INTP",
-    "nickname": "홀로 미래를 짓는 탐구자",
-    "description": "간섭받지 않는 조용한 자리에서 새로운 것을 만들어 볼 수 있는 여백을 인천에 바랍니다."
+    "code": "CNOH",
+    "nickname": "서두르지 않는 갯벌의 오랜 어부",
+    "description": "갯벌과 산을 그대로 두고 지금 있는 것으로 조용히 먹고사는 인천을 바랍니다.",
+    "image": "/city-types/CNOH.svg"
   },
   {
-    "code": "INFJ",
-    "nickname": "따뜻한 미래를 그리는 사람",
-    "description": "빠르지 않아도 좋으니, 달라진 인천에서 아무도 외롭지 않도록 촘촘히 준비되기를 바랍니다."
+    "code": "CNWF",
+    "nickname": "느린 숲마을의 새 돌봄 이웃",
+    "description": "숲과 물가를 낀 한적한 동네에 돌봄이 새롭게 촘촘해지는 인천을 바랍니다.",
+    "image": "/city-types/CNWF.svg"
   },
   {
-    "code": "INFP",
-    "nickname": "다정한 변화를 꿈꾸는 사람",
-    "description": "작은 동네에서 새로운 시도가 다정하게 피어나는, 서두르지 않는 인천을 마음에 둡니다."
+    "code": "CNWH",
+    "nickname": "느티나무 아래 천천히 늙어가는 이웃",
+    "description": "오래된 나무와 조용한 물가 곁에서 익숙한 이웃과 함께 나이 드는 인천을 바랍니다.",
+    "image": "/city-types/CNWH.svg"
   }
 ]

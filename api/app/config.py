@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     """Define environment-backed application settings."""
 
     gemini_api_key: str
-    gemini_model: str = "gemini-3.5-flash"
+    gemini_model: str = "gemini-3-flash-preview"
     file_search_store_name: str | None = None
     gcp_project_id: str | None = None
     interview_target_turns: int = 15

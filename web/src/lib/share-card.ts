@@ -1,11 +1,27 @@
 import { getFontEmbedCSS, toBlob } from "html-to-image";
 
+/**
+ * A card showing a broken illustration would rasterize into a blank panel, so the
+ * attempt ends here. A card already in typography fallback holds no image at all.
+ */
+function assertImagesRendered(node: HTMLDivElement): void {
+  const images = [...node.querySelectorAll("img")];
+  const missing = images.some(
+    (image) => !image.complete || !image.naturalWidth,
+  );
+
+  if (missing) {
+    throw new Error("Type illustration could not be embedded");
+  }
+}
+
 /** Explicit font embedding prevents the exported bitmap from using a fallback face. */
 async function createCardFile(
   node: HTMLDivElement,
-  code: string,
+  typeName: string,
 ): Promise<File> {
   await document.fonts.ready;
+  assertImagesRendered(node);
   const primaryFont = getComputedStyle(node).fontFamily.split(",")[0].trim();
   const loadedFaces = await document.fonts.load(`700 24px ${primaryFont}`);
   const fontEmbedCSS = await getFontEmbedCSS(node, {
@@ -27,7 +43,7 @@ async function createCardFile(
     throw new Error("Share card could not be rasterized");
   }
 
-  return new File([blob], `유스플랜AI-${code}.png`, { type: "image/png" });
+  return new File([blob], `유스플랜AI-${typeName}.png`, { type: "image/png" });
 }
 
 function canShareFiles(file: File): boolean {
@@ -50,9 +66,9 @@ function saveFile(file: File): void {
 /** Desktop browsers without the Share API still get the card, as PLAN 9.3 requires. */
 export async function shareTypeCard(
   node: HTMLDivElement,
-  code: string,
+  typeName: string,
 ): Promise<void> {
-  const file = await createCardFile(node, code);
+  const file = await createCardFile(node, typeName);
 
   if (!canShareFiles(file)) {
     saveFile(file);
@@ -61,7 +77,7 @@ export async function shareTypeCard(
 
   await navigator.share({
     files: [file],
-    title: `유스플랜AI ${code}`,
+    title: `유스플랜AI ${typeName}`,
     text: "내가 바라는 2040년 인천의 도시 유형이에요.",
   });
 }
@@ -69,7 +85,7 @@ export async function shareTypeCard(
 /** Direct download always saves the generated image without opening a share sheet. */
 export async function downloadTypeCard(
   node: HTMLDivElement,
-  code: string,
+  typeName: string,
 ): Promise<void> {
-  saveFile(await createCardFile(node, code));
+  saveFile(await createCardFile(node, typeName));
 }

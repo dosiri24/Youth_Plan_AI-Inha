@@ -23,8 +23,8 @@ export type TranscriptMessage = {
   timestamp: string;
 };
 
-export type AxisName = "EI" | "SN" | "TF" | "JP";
-export type AxisLetter = "E" | "I" | "S" | "N" | "T" | "F" | "J" | "P";
+export type AxisName = "AC" | "UN" | "OW" | "FH";
+export type AxisLetter = "A" | "C" | "U" | "N" | "O" | "W" | "F" | "H";
 
 export type AxisResult = {
   axis: AxisName;
@@ -302,4 +302,163 @@ export async function submitResult(sessionId: string): Promise<string> {
   const data = (await response.json()) as { submission_id: string };
 
   return data.submission_id;
+}
+
+export type Evidence = {
+  axis: AxisName;
+  pole: AxisLetter;
+  weight: number;
+  text: string;
+  turn: number;
+};
+
+export type AxisResultFull = AxisResult & {
+  scores: Record<string, number>;
+  evidence: Evidence[];
+};
+
+export type TypeResultFull = {
+  code: string;
+  axes: AxisResultFull[];
+};
+
+export type Quote = {
+  text: string;
+  turn: number;
+};
+
+export type DemandFull = Demand & {
+  quotes: Quote[];
+  topics: string[];
+};
+
+export type AxisDemandFull = {
+  axis: AxisName;
+  letter: AxisLetter;
+  demands: DemandFull[];
+};
+
+export type PersonalReportFull = Omit<PersonalReport, "axis_demands"> & {
+  axis_demands: AxisDemandFull[];
+};
+
+export type SubmissionSummary = {
+  submission_id: string;
+  submitted_at: string;
+  nickname: string;
+  region: string;
+  type_code: string;
+  turn_count: number;
+  revision_count: number;
+};
+
+export type SubmissionDetail = {
+  submission_id: string;
+  session_id: string;
+  submitted_at: string;
+  self_info: SelfInfo;
+  raw_transcript: TranscriptMessage[];
+  evidence_log: Evidence[];
+  type_result: TypeResultFull;
+  report: PersonalReportFull;
+  deidentified: unknown;
+};
+
+export type AxisPoleStat = {
+  letter: AxisLetter;
+  count: number;
+  mean_strength: number;
+};
+
+export type AxisStat = {
+  axis: AxisName;
+  poles: AxisPoleStat[];
+  submission_ids: string[];
+};
+
+export type AxisPoleSummary = {
+  letter: AxisLetter;
+  sentences: string[];
+};
+
+export type RepresentativeQuote = {
+  quote_id: string;
+  submission_id: string;
+  text: string;
+};
+
+export type AxisSummary = {
+  axis: AxisName;
+  poles: AxisPoleSummary[];
+  quotes: RepresentativeQuote[];
+};
+
+export type AnalysisRun = {
+  run_id: string;
+  executed_at: string;
+  input_submission_ids: string[];
+  axis_stats: AxisStat[];
+  type_distribution: Record<string, number>;
+  axis_summaries: AxisSummary[];
+};
+
+/** The admin table reads store summaries without loading full transcripts. */
+export async function listSubmissions(): Promise<SubmissionSummary[]> {
+  const response = await request("/api/admin/submissions", { method: "GET" });
+
+  return (await response.json()) as SubmissionSummary[];
+}
+
+/** Dev mode seeds fixed-id example submissions so repeated calls do not duplicate. */
+export async function seedSubmissions(): Promise<string[]> {
+  const response = await request("/api/dev/submissions/seed", {
+    method: "POST",
+  });
+
+  return (await response.json()) as string[];
+}
+
+/** A missing submission returns null so the detail page can guide back to the list. */
+export async function getSubmission(
+  submissionId: string,
+): Promise<SubmissionDetail | null> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/admin/submissions/${submissionId}`,
+    { method: "GET" },
+  );
+
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as SubmissionDetail;
+}
+
+/** The analysis pipeline lands in Phase 5, so 501 is a known not-ready signal. */
+export async function runAnalysis(): Promise<"ok" | "not_ready"> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/analysis/run`, {
+    method: "POST",
+  });
+
+  if (response.status === 501) return "not_ready";
+  if (!response.ok) {
+    throw new Error(`API request failed with status ${response.status}`);
+  }
+
+  return "ok";
+}
+
+/** No analysis yet returns null so the report keeps the static guidance visible. */
+export async function getLatestAnalysis(): Promise<AnalysisRun | null> {
+  const response = await fetch(`${API_BASE_URL}/api/admin/analysis/latest`, {
+    method: "GET",
+  });
+
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as AnalysisRun;
 }

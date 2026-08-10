@@ -1,8 +1,12 @@
 import type { AxisLetter, AxisName } from "@/lib/api";
 
+/** Display ceiling for axes whose opposite pole was never observed (RETYPE 5). */
+const SINGLE_POLE_DISPLAY_MAX = 95;
+
 type Pole = {
   letter: AxisLetter;
   label: string;
+  badge: string;
 };
 
 type AxisInfo = {
@@ -12,25 +16,25 @@ type AxisInfo = {
 };
 
 export const AXIS_INFO: Record<AxisName, AxisInfo> = {
-  EI: {
-    title: "에너지의 방향",
-    left: { letter: "E", label: "북적이고 열린 도시" },
-    right: { letter: "I", label: "조용하고 아늑한 도시" },
+  AC: {
+    title: "생활 리듬",
+    left: { letter: "A", label: "활기찬 도시", badge: "활기찬" },
+    right: { letter: "C", label: "여유로운 도시", badge: "여유로운" },
   },
-  SN: {
-    title: "시선의 대상",
-    left: { letter: "S", label: "지금 있는 것을 살리는" },
-    right: { letter: "N", label: "새로운 것에 도전하는" },
+  UN: {
+    title: "선호 공간",
+    left: { letter: "U", label: "도시적인 풍경", badge: "도시적인" },
+    right: { letter: "N", label: "자연과 가까운 풍경", badge: "자연친화" },
   },
-  TF: {
-    title: "우선하는 가치",
-    left: { letter: "T", label: "효율적으로 굴러가는" },
-    right: { letter: "F", label: "서로 챙기고 보듬는" },
+  OW: {
+    title: "우선 가치",
+    left: { letter: "O", label: "기회가 많은 도시", badge: "기회" },
+    right: { letter: "W", label: "서로 돌보는 도시", badge: "돌봄" },
   },
-  JP: {
-    title: "도시의 운영 방식",
-    left: { letter: "J", label: "계획대로 정돈된" },
-    right: { letter: "P", label: "자유롭게 섞이는" },
+  FH: {
+    title: "발전 가치",
+    left: { letter: "F", label: "새로움을 여는 도시", badge: "새로움" },
+    right: { letter: "H", label: "이야기를 이어가는 도시", badge: "이야기" },
   },
 };
 
@@ -38,4 +42,24 @@ export const AXIS_INFO: Record<AxisName, AxisInfo> = {
 export function getPoleLabel(axis: AxisName, letter: AxisLetter): string {
   const info = AXIS_INFO[axis];
   return info.left.letter === letter ? info.left.label : info.right.label;
+}
+
+/** Short badges replace the hidden four-letter code as the card's identifier. */
+export function getPoleBadge(axis: AxisName, letter: AxisLetter): string {
+  const info = AXIS_INFO[axis];
+  return info.left.letter === letter ? info.left.badge : info.right.badge;
+}
+
+/**
+ * Strength is `winner ÷ axis total × 100`, so it reaches exactly 100 only when the
+ * opposite pole scored zero. That makes it an exact single-pole test even in the
+ * participant payload, which carries no per-pole `scores`.
+ */
+export function isSinglePole(strength: number): boolean {
+  return strength === 100;
+}
+
+/** Stored strength stays 51~100; only what participants and admins read is capped. */
+export function getDisplayStrength(strength: number): number {
+  return isSinglePole(strength) ? SINGLE_POLE_DISPLAY_MAX : strength;
 }

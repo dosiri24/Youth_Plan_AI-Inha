@@ -1,12 +1,15 @@
+import asyncio
 import json
 from collections.abc import AsyncIterator
+from contextlib import suppress
 
 from google.genai import types
 
-from app import gemini, knowledge, prompts, session
+from app import gemini, knowledge, prompts, session, tagging
+from app.axes import Evidence
 from app.config import get_settings
 from app.logging import log_event
-from app.trailer import TrailerParser, TrailerResult
+from app.trailer import TrailerParser
 
 
 async def start(current: session.Session) -> AsyncIterator[str]:
@@ -28,6 +31,7 @@ async def _run(
 ) -> AsyncIterator[str]:
     """Execute one Gemini turn and emit participant-safe SSE events."""
     settings = get_settings()
+    scoring_task = _start_scoring(current, user_text, turn)
     contents = _build_contents(current, user_text, turn)
     tool = knowledge.file_search_tool()
     config = types.GenerateContentConfig(
@@ -52,13 +56,15 @@ async def _run(
                 visible_parts.append(safe_text)
                 yield _sse("delta", {"text": safe_text})
 
-    result = parser.finish(turn)
+    result = parser.finish()
     if result.text:
         visible_parts.append(result.text)
         yield _sse("delta", {"text": result.text})
     assistant_text = "".join(visible_parts)
 
     if result.aborted:
+        if scoring_task is not None:
+            await _cancel_scoring(scoring_task, current["session_id"], turn)
         log_event(
             "aborted",
             session_id=current["session_id"],
@@ -69,8 +75,12 @@ async def _run(
         yield _sse("end", {"state": "aborted"})
         return
 
-    _save_turn(current, turn, user_text, assistant_text, result)
-    _log_issues(current["session_id"], turn, result.issues)
+    evidence = (
+        await _collect_scoring(scoring_task, current["session_id"], turn)
+        if scoring_task is not None
+        else []
+    )
+    _save_turn(current, turn, user_text, assistant_text, evidence)
     if result.ended:
         current["status"] = "ended"
         log_event(
@@ -130,23 +140,81 @@ def _save_turn(
     turn: int,
     user_text: str | None,
     assistant_text: str,
-    result: TrailerResult,
+    evidence: list[Evidence],
 ) -> None:
     """Persist one completed stream into the in-memory session."""
     if user_text is None:
         session.save_greeting(current, assistant_text)
     else:
         session.save_turn(current, turn, user_text, assistant_text)
-        current["evidence_log"].extend(result.evidence)
+        current["evidence_log"].extend(evidence)
+
+
+def _start_scoring(
+    current: session.Session,
+    user_text: str | None,
+    turn: int,
+) -> asyncio.Task[tagging.TagResult] | None:
+    """Start scoring from snapshots that exclude the current turn."""
+    if user_text is None:
+        return None
+    return asyncio.create_task(
+        tagging.tag(
+            list(current["messages"]),
+            list(current["evidence_log"]),
+            user_text,
+            turn,
+        )
+    )
+
+
+async def _collect_scoring(
+    task: asyncio.Task[tagging.TagResult],
+    session_id: str,
+    turn: int,
+) -> list[Evidence]:
+    """Collect scoring without allowing its failure to interrupt the interview."""
+    try:
+        result = await task
+    except Exception as error:
+        log_event(
+            "evidence_scoring_failed",
+            session_id=session_id,
+            turn=turn,
+            reason=type(error).__name__,
+        )
+        return []
+
+    log_event(
+        "evidence_scored",
+        session_id=session_id,
+        token_usage=result.token_usage,
+        turn=turn,
+        evidence_count=len(result.evidence),
+        issue_count=len(result.issues),
+    )
+    _log_issues(session_id, turn, result.issues)
+    return result.evidence
+
+
+async def _cancel_scoring(
+    task: asyncio.Task[tagging.TagResult],
+    session_id: str,
+    turn: int,
+) -> None:
+    """Cancel and join scoring before discarding an aborted session."""
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await _collect_scoring(task, session_id, turn)
 
 
 def _log_issues(session_id: str, turn: int, issues: list[str]) -> None:
-    """Log trailer failures without including participant content."""
+    """Log evidence validation failures without participant content."""
     for issue in issues:
         event = (
             "evidence_item_invalid"
             if issue.startswith("evidence_item_invalid")
-            else "evidence_trailer_invalid"
+            else "evidence_response_invalid"
         )
         log_event(event, session_id=session_id, turn=turn, reason=issue)
 

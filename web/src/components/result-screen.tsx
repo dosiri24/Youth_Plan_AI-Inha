@@ -19,6 +19,7 @@ import {
   type RevisionSelection,
   type TypeResult,
 } from "@/lib/api";
+import { getCityType } from "@/lib/city-types";
 import { downloadTypeCard, shareTypeCard } from "@/lib/share-card";
 
 type ResultScreenProps = {
@@ -190,7 +191,7 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
 
     setCardAction("share");
     try {
-      await shareTypeCard(card, result.type_result.code);
+      await shareTypeCard(card, getCityType(result.type_result.code).nickname);
     } catch {
       // Share/save failure must not discard the result; only this attempt ends (PLAN 9.3, D1).
     } finally {
@@ -204,7 +205,10 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
 
     setCardAction("download");
     try {
-      await downloadTypeCard(card, result.type_result.code);
+      await downloadTypeCard(
+        card,
+        getCityType(result.type_result.code).nickname,
+      );
     } catch {
       // Share/save failure must not discard the result; only this attempt ends (PLAN 9.3, D1).
     } finally {

@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Annotated, Literal
+from datetime import UTC, datetime
+from typing import Annotated
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Response, status
@@ -8,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from app import interview, report, scoring, session
+from app import interview, report, scoring, session, store
 from app.config import get_settings
 from app.logging import configure_logging, log_event
 
@@ -38,7 +39,7 @@ class SentencePosition(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    axis: Literal["EI", "SN", "TF", "JP"]
+    axis: report.AxisName
     demand_id: Annotated[str, Field(min_length=1)]
     sentence_index: Annotated[int, Field(ge=0)]
 
@@ -181,10 +182,68 @@ def submit_result(session_id: str) -> SubmissionResponse:
         raise HTTPException(status.HTTP_409_CONFLICT)
 
     submission_id = str(uuid4())
-    # Phase 4 persistence must save without a status change, then discard only after success.
+    # Persist the full document before discarding so a save failure leaves the session retryable.
+    store.get_store().save(submission_id, _submission_document(current))
     session.discard_session(session_id)
-    log_event("submitted", session_id=session_id)
+    log_event("submitted", session_id=session_id, submission_id=submission_id)
     return SubmissionResponse(submission_id=submission_id)
+
+
+@app.get("/api/admin/submissions")
+def list_submissions() -> list[dict[str, object]]:
+    """Return submission summaries ordered newest first for the admin list."""
+    summaries = [_submission_summary(document) for document in store.get_store().list()]
+    summaries.sort(key=lambda item: item["submitted_at"], reverse=True)
+    return summaries
+
+
+@app.get("/api/admin/submissions/{submission_id}")
+def get_submission(submission_id: str) -> dict[str, object]:
+    """Return one complete submission document for the admin detail."""
+    document = store.get_store().get(submission_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    return document
+
+
+@app.post("/api/admin/analysis/run")
+def run_analysis() -> None:
+    """Signal that the Phase 5 analysis pipeline is not yet implemented."""
+    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED)
+
+
+@app.get("/api/admin/analysis/latest")
+def latest_analysis() -> None:
+    """Report an empty analysis state until a run exists."""
+    raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+
+def _submission_document(current: session.Session) -> store.Document:
+    """Build the 7.5 submissions document from a submitted session."""
+    return {
+        "session_id": current["session_id"],
+        "submitted_at": datetime.now(UTC),
+        "self_info": current["report"]["self_info"],
+        "raw_transcript": current["messages"],
+        "evidence_log": current["evidence_log"],
+        "type_result": current["type_result"],
+        "report": current["report"],
+        "deidentified": None,
+    }
+
+
+def _submission_summary(document: store.Document) -> dict[str, object]:
+    """Project one stored submission into an admin list summary."""
+    personal_report = document["report"]
+    return {
+        "submission_id": document["submission_id"],
+        "submitted_at": document["submitted_at"],
+        "nickname": personal_report["self_info"]["nickname"],
+        "region": personal_report["self_info"]["region"],
+        "type_code": document["type_result"]["code"],
+        "turn_count": personal_report["meta"]["turn_count"],
+        "revision_count": personal_report["meta"]["revision_count"],
+    }
 
 
 def _find_session(session_id: str) -> session.Session:

@@ -6,7 +6,7 @@ from typing import TypedDict
 AxisDefinition = tuple[str, tuple[str, str], str, str]
 
 _AXES_PATH = Path(__file__).resolve().parents[1] / "prompts" / "axes.md"
-_EXPECTED_AXIS_ORDER = ("EI", "SN", "TF", "JP")
+_AXIS_COUNT = 4
 _REQUIRED_FIELDS = {"axis", "poles", "default", "display"}
 
 
@@ -38,11 +38,11 @@ def load_axes() -> tuple[AxisDefinition, ...]:
 
 def _validate_axes(value: object) -> tuple[AxisDefinition, ...]:
     """Reject axis blocks that do not match the fixed four-axis schema."""
-    if not isinstance(value, list) or len(value) != len(_EXPECTED_AXIS_ORDER):
+    if not isinstance(value, list) or len(value) != _AXIS_COUNT:
         raise ValueError("axis contract must contain four axes")
 
     definitions: list[AxisDefinition] = []
-    for index, item in enumerate(value):
+    for item in value:
         if not isinstance(item, dict) or set(item) != _REQUIRED_FIELDS:
             raise ValueError("each axis must contain axis, poles, default, and display")
 
@@ -50,8 +50,6 @@ def _validate_axes(value: object) -> tuple[AxisDefinition, ...]:
         pole_values = item["poles"]
         default = item["default"]
         display = item["display"]
-        if axis != _EXPECTED_AXIS_ORDER[index]:
-            raise ValueError("axes must use the fixed EI, SN, TF, JP order")
         if (
             not isinstance(pole_values, list)
             or len(pole_values) != 2
@@ -60,17 +58,23 @@ def _validate_axes(value: object) -> tuple[AxisDefinition, ...]:
             raise ValueError("each axis must contain two one-letter poles")
 
         poles = (pole_values[0], pole_values[1])
-        if axis != "".join(poles):
+        if not isinstance(axis, str) or axis != "".join(poles):
             raise ValueError("axis names must match their ordered poles")
         if not isinstance(default, str) or default not in poles:
             raise ValueError("each default must be one of its axis poles")
-        if not isinstance(display, str) or display != "/".join(poles):
-            raise ValueError("each display must join its poles with a slash")
+        if not isinstance(display, str) or not display.strip():
+            raise ValueError("each display must be a non-empty name")
         definitions.append((axis, poles, default, display))
+
+    # A repeated letter would make a four-position type code ambiguous to read back.
+    letters = [pole for _axis, poles, _default, _display in definitions for pole in poles]
+    if len(set(letters)) != len(letters):
+        raise ValueError("every pole letter must be unique across all axes")
     return tuple(definitions)
 
 
 AXES = load_axes()
+AXIS_NAMES = tuple(axis for axis, _poles, _default, _display in AXES)
 SCORING_AXES = tuple((axis, poles, default) for axis, poles, default, _display in AXES)
 AXIS_POLES = {axis: frozenset(poles) for axis, poles, _default, _display in AXES}
 DISPLAY_AXES = tuple((axis, display) for axis, _poles, _default, display in AXES)

@@ -6,10 +6,11 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from app import session
+from app import session, store
 from app.logging import log_event
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures"
+SUBMISSION_FIXTURE_DIR = FIXTURE_DIR / "submissions"
 router = APIRouter(prefix="/api/dev")
 
 
@@ -43,6 +44,20 @@ def list_fixtures() -> list[FixtureInfo]:
         for path in sorted(FIXTURE_DIR.glob("*.json"))
         for data in [json.loads(path.read_text())]
     ]
+
+
+@router.post("/submissions/seed", response_model=list[str])
+def seed_submissions() -> list[str]:
+    """Load the example submission documents into the store under their fixed ids."""
+    seeded: list[str] = []
+    for path in sorted(SUBMISSION_FIXTURE_DIR.glob("*.json")):
+        document = json.loads(path.read_text())
+        submission_id = document.pop("submission_id")
+        document["submitted_at"] = datetime.fromisoformat(document["submitted_at"])
+        store.get_store().save(submission_id, document)
+        seeded.append(submission_id)
+    log_event("dev_submissions_seeded", count=len(seeded))
+    return seeded
 
 
 @router.post(

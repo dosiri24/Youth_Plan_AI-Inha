@@ -13,7 +13,7 @@ export function AxisReasons({ reasons }: AxisReasonsProps) {
         id="axis-reasons-title"
         className="text-[24px] font-bold tracking-[-0.03em]"
       >
-        도시 MBTI 세부 결과
+        도시 유형 세부 결과
       </h2>
       <p className="mt-3 text-[15px] leading-6 text-muted-foreground">
         중요하게 여긴 도시의 모습을 네 가지 축으로 풀어봤어요.
@@ -25,9 +25,7 @@ export function AxisReasons({ reasons }: AxisReasonsProps) {
             <p className="text-[12px] font-bold text-muted-foreground">
               {AXIS_INFO[reason.axis].title}
             </p>
-            <h3 className="mt-1.5 text-[17px] font-bold">
-              <span className="text-primary">{reason.letter}</span>
-              <span className="mx-1.5 text-muted-foreground">·</span>
+            <h3 className="mt-1.5 text-[17px] font-bold text-primary">
               {getPoleLabel(reason.axis, reason.letter)}
             </h3>
             <p className="mt-3 text-[14px] leading-6 text-foreground">
