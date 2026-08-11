@@ -1,11 +1,21 @@
+import {
+  AccessDenied,
+  readAccessCode,
+  rejectAccessCode,
+} from "@/lib/access-code";
+
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
 ).replace(/\/$/, "");
 
+const GATED_PATH = /^\/api\/(dev|admin)\//;
+
 export type SessionState = "continue" | "ended" | "aborted";
 
+export type InterviewEnd = { state: SessionState; progress: number };
+
 export type InterviewEvent =
-  { type: "delta"; text: string } | { type: "end"; state: SessionState };
+  { type: "delta"; text: string } | ({ type: "end" } & InterviewEnd);
 
 type SessionResponse = {
   session_id: string;
@@ -87,9 +97,35 @@ export type RevisionSelection = {
   sentence_index: number;
 };
 
+/**
+ * Every call funnels through here so no gated path can forget the access code.
+ * `ownsForbidden` is for the one route that answers 403 to a second code sent in
+ * the body, where the header code the gate already cleared must stay untouched.
+ */
+async function call(
+  path: string,
+  init: RequestInit,
+  ownsForbidden = false,
+): Promise<Response> {
+  const gated = GATED_PATH.test(path);
+  const code = gated ? readAccessCode() : null;
+  const headers = init.headers as Record<string, string> | undefined;
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: code === null ? headers : { ...headers, "X-Access-Code": code },
+  });
+
+  if (gated && !ownsForbidden && response.status === 403) {
+    rejectAccessCode();
+    throw new AccessDenied("Access code rejected");
+  }
+
+  return response;
+}
+
 /** A shared status gate prevents screens from inventing recovery paths. */
 async function request(path: string, init: RequestInit): Promise<Response> {
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  const response = await call(path, init);
 
   if (!response.ok) {
     throw new Error(`API request failed with status ${response.status}`);
@@ -130,9 +166,11 @@ function parseFrame(frame: string): InterviewEvent | null {
     "state" in data &&
     (data.state === "continue" ||
       data.state === "ended" ||
-      data.state === "aborted")
+      data.state === "aborted") &&
+    "progress" in data &&
+    typeof data.progress === "number"
   ) {
-    return { type: "end", state: data.state };
+    return { type: "end", state: data.state, progress: data.progress };
   }
 
   throw new Error("Unknown SSE event");
@@ -256,6 +294,11 @@ export function sendMessage(
     JSON.stringify({ text }),
     signal,
   );
+}
+
+/** The server owns the evidence of a turn, so undoing one cannot be a client-side edit. */
+export async function undoTurn(sessionId: string): Promise<void> {
+  await request(`/api/sessions/${sessionId}/turns/last`, { method: "DELETE" });
 }
 
 /** Deletion is reserved for explicit abandonment rather than recovery. */
@@ -393,6 +436,50 @@ export type AxisSummary = {
   quotes: RepresentativeQuote[];
 };
 
+export type DashboardKpi = {
+  participants: number;
+  demands: number;
+  regions: number;
+  age_min: number;
+  age_max: number;
+};
+
+export type AgeBand = {
+  band: string;
+  male: number;
+  female: number;
+  unknown: number;
+  total: number;
+};
+
+export type TopicStat = {
+  topic: string;
+  demands: number;
+  people: number;
+};
+
+export type PersonDemand = {
+  axis: AxisName;
+  title: string;
+  topics: string[];
+};
+
+export type DashboardPerson = {
+  submission_id: string;
+  nickname: string;
+  gender: "male" | "female" | "unknown";
+  age: number;
+  region: string;
+  code: string;
+  turns: number;
+  submitted_at: string;
+  summary: string;
+  demands: PersonDemand[];
+  reasons: AxisReason[];
+};
+
+export type AiNoteCard = "map" | "topics" | "axes" | "cross" | "types";
+
 export type AnalysisRun = {
   run_id: string;
   executed_at: string;
@@ -400,6 +487,17 @@ export type AnalysisRun = {
   axis_stats: AxisStat[];
   type_distribution: Record<string, number>;
   axis_summaries: AxisSummary[];
+  /**
+   * Dashboard aggregates arrived in Phase 10 and older runs were not migrated,
+   * so every field below is absent until the next analysis run.
+   */
+  kpi?: DashboardKpi;
+  ages?: AgeBand[];
+  regions_count?: Record<string, number>;
+  topics?: TopicStat[];
+  cross?: Record<string, number[]>;
+  people?: DashboardPerson[];
+  ai_notes?: Partial<Record<AiNoteCard, string>>;
 };
 
 /** The admin table reads store summaries without loading full transcripts. */
@@ -422,10 +520,9 @@ export async function seedSubmissions(): Promise<string[]> {
 export async function getSubmission(
   submissionId: string,
 ): Promise<SubmissionDetail | null> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/admin/submissions/${submissionId}`,
-    { method: "GET" },
-  );
+  const response = await call(`/api/admin/submissions/${submissionId}`, {
+    method: "GET",
+  });
 
   if (response.status === 404) return null;
   if (!response.ok) {
@@ -435,13 +532,36 @@ export async function getSubmission(
   return (await response.json()) as SubmissionDetail;
 }
 
-/** The analysis pipeline lands in Phase 5, so 501 is a known not-ready signal. */
-export async function runAnalysis(): Promise<"ok" | "not_ready"> {
-  const response = await fetch(`${API_BASE_URL}/api/admin/analysis/run`, {
-    method: "POST",
-  });
+/** The body code is a separate confirmation, so its rejection stays on the dialog. */
+export async function deleteSubmission(
+  submissionId: string,
+  accessCode: string,
+): Promise<"ok" | "denied"> {
+  const response = await call(
+    `/api/admin/submissions/${submissionId}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ access_code: accessCode }),
+    },
+    true,
+  );
 
-  if (response.status === 501) return "not_ready";
+  if (response.status === 403) return "denied";
+  if (!response.ok) {
+    throw new Error(`API request failed with status ${response.status}`);
+  }
+
+  return "ok";
+}
+
+/** An empty store answers 409, which is guidance to seed rather than a failure. */
+export async function runAnalysis(): Promise<"ok" | "empty"> {
+  const response = await call("/api/admin/analysis/run", { method: "POST" });
+
+  if (response.status === 409) return "empty";
   if (!response.ok) {
     throw new Error(`API request failed with status ${response.status}`);
   }
@@ -451,9 +571,7 @@ export async function runAnalysis(): Promise<"ok" | "not_ready"> {
 
 /** No analysis yet returns null so the report keeps the static guidance visible. */
 export async function getLatestAnalysis(): Promise<AnalysisRun | null> {
-  const response = await fetch(`${API_BASE_URL}/api/admin/analysis/latest`, {
-    method: "GET",
-  });
+  const response = await call("/api/admin/analysis/latest", { method: "GET" });
 
   if (response.status === 404) return null;
   if (!response.ok) {

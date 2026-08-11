@@ -1,0 +1,25 @@
+# Keep this file so gcloud does not fall back to .gitignore and omit deployment assets.
+.git/
+
+**/node_modules/
+**/.next/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.cache/
+
+api/tests/
+web/e2e/
+data/plan2040/
+Incheon_City_Plan/
+**/screenshots/
+**/shots/
+
+.env
+.env.*
+**/.env
+**/.env.*
+
+!data/plan2040_summary.md

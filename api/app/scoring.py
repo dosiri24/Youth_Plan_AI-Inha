@@ -56,7 +56,7 @@ def _score_axis(
 
     winner = _winner(poles, default, scores, axis_evidence)
     total = sum(scores.values())
-    strength = max(51, _round_half_up(scores[winner] / total * 100))
+    strength = max(51, round_half_up(scores[winner] / total * 100))
     return {
         "axis": axis,
         "letter": winner,
@@ -83,6 +83,6 @@ def _winner(
     return default
 
 
-def _round_half_up(value: float) -> int:
+def round_half_up(value: float) -> int:
     """Avoid Python's even-number tie behavior at exact half boundaries."""
     return floor(value + 0.5)

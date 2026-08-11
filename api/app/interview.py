@@ -1,27 +1,25 @@
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import suppress
 
 from google.genai import types
 
 from app import gemini, knowledge, prompts, session, tagging
-from app.axes import Evidence
+from app.axes import AXIS_NAMES, Evidence
 from app.config import get_settings
 from app.logging import log_event
 from app.trailer import TrailerParser
 
 
-async def start(current: session.Session) -> AsyncIterator[str]:
+def start(current: session.Session) -> AsyncIterator[str]:
     """Stream and store the opening greeting for one session."""
-    async for event in _run(current, 0, None):
-        yield event
+    return _run(current, 0, None)
 
 
-async def reply(current: session.Session, user_text: str) -> AsyncIterator[str]:
+def reply(current: session.Session, user_text: str) -> AsyncIterator[str]:
     """Stream and store one assistant response to a participant utterance."""
-    async for event in _run(current, session.next_turn(current), user_text):
-        yield event
+    return _run(current, session.next_turn(current), user_text)
 
 
 async def _run(
@@ -32,73 +30,91 @@ async def _run(
     """Execute one Gemini turn and emit participant-safe SSE events."""
     settings = get_settings()
     scoring_task = _start_scoring(current, user_text, turn)
-    contents = _build_contents(current, user_text, turn)
-    tool = knowledge.file_search_tool()
-    config = types.GenerateContentConfig(
-        system_instruction=prompts.build_fixed_prefix(current["age_2040"]),
-        tools=[tool] if tool is not None else None,
-    )
-    stream = await gemini.get_client().aio.models.generate_content_stream(
-        model=settings.gemini_model,
-        contents=contents,
-        config=config,
-    )
-    parser = TrailerParser()
-    visible_parts: list[str] = []
-    token_usage: dict[str, int] | None = None
-
-    async for chunk in stream:
-        if chunk.usage_metadata is not None:
-            token_usage = gemini.token_usage(chunk.usage_metadata)
-        if chunk.text:
-            safe_text = parser.feed(chunk.text)
-            if safe_text:
-                visible_parts.append(safe_text)
-                yield _sse("delta", {"text": safe_text})
-
-    result = parser.finish()
-    if result.text:
-        visible_parts.append(result.text)
-        yield _sse("delta", {"text": result.text})
-    assistant_text = "".join(visible_parts)
-
-    if result.aborted:
-        if scoring_task is not None:
-            await _cancel_scoring(scoring_task, current["session_id"], turn)
-        log_event(
-            "aborted",
-            session_id=current["session_id"],
-            token_usage=token_usage,
-            turn=turn,
+    try:
+        contents = _build_contents(current, user_text, turn)
+        tool = knowledge.file_search_tool()
+        config = types.GenerateContentConfig(
+            system_instruction=prompts.build_fixed_prefix(current["age_2040"]),
+            tools=[tool] if tool is not None else None,
         )
-        session.discard_session(current["session_id"])
-        yield _sse("end", {"state": "aborted"})
-        return
+        stream = await gemini.get_client().aio.models.generate_content_stream(
+            model=settings.gemini_model,
+            contents=contents,
+            config=config,
+        )
+        parser = TrailerParser()
+        visible_parts: list[str] = []
+        token_usage: dict[str, int] | None = None
 
-    evidence = (
-        await _collect_scoring(scoring_task, current["session_id"], turn)
-        if scoring_task is not None
-        else []
-    )
-    _save_turn(current, turn, user_text, assistant_text, evidence)
-    if result.ended:
-        current["status"] = "ended"
-        log_event(
-            "ended",
-            session_id=current["session_id"],
-            token_usage=token_usage,
-            turn=turn,
+        async for chunk in stream:
+            if chunk.usage_metadata is not None:
+                token_usage = gemini.token_usage(chunk.usage_metadata)
+            if chunk.text:
+                safe_text = parser.feed(chunk.text)
+                if safe_text:
+                    visible_parts.append(safe_text)
+                    yield _sse("delta", {"text": safe_text})
+
+        result = parser.finish()
+        if result.text:
+            visible_parts.append(result.text)
+            yield _sse("delta", {"text": result.text})
+        assistant_text = "".join(visible_parts)
+
+        if result.aborted:
+            if scoring_task is not None:
+                await _cancel_scoring(scoring_task, current["session_id"], turn)
+            log_event(
+                "aborted",
+                session_id=current["session_id"],
+                token_usage=token_usage,
+                turn=turn,
+            )
+            session.discard_session(current["session_id"])
+            progress = _progress(
+                current["evidence_log"],
+                turn,
+                "aborted",
+                settings.axis_min_evidence,
+                settings.interview_target_turns,
+            )
+            yield _sse("end", {"state": "aborted", "progress": progress})
+            return
+
+        evidence = (
+            await _collect_scoring(scoring_task, current["session_id"], turn)
+            if scoring_task is not None
+            else []
         )
-        state = "ended"
-    else:
-        log_event(
-            "turn_progress",
-            session_id=current["session_id"],
-            token_usage=token_usage,
-            turn=turn,
+        _save_turn(current, turn, user_text, assistant_text, evidence)
+        if result.ended:
+            current["status"] = "ended"
+            log_event(
+                "ended",
+                session_id=current["session_id"],
+                token_usage=token_usage,
+                turn=turn,
+            )
+            state = "ended"
+        else:
+            log_event(
+                "turn_progress",
+                session_id=current["session_id"],
+                token_usage=token_usage,
+                turn=turn,
+            )
+            state = "continue"
+        progress = _progress(
+            current["evidence_log"],
+            turn,
+            state,
+            settings.axis_min_evidence,
+            settings.interview_target_turns,
         )
-        state = "continue"
-    yield _sse("end", {"state": state})
+        yield _sse("end", {"state": state, "progress": progress})
+    finally:
+        if scoring_task is not None and not scoring_task.done():
+            scoring_task.cancel()
 
 
 def _build_contents(
@@ -148,6 +164,31 @@ def _save_turn(
     else:
         session.save_turn(current, turn, user_text, assistant_text)
         current["evidence_log"].extend(evidence)
+
+
+def _progress(
+    evidence: Sequence[Evidence],
+    turn: int,
+    state: str,
+    axis_min_evidence: int,
+    target_turns: int,
+) -> int:
+    """Calculate the participant progress percentage from coverage and turn ratios."""
+    if state == "aborted" or turn == 0:
+        return 0
+    if state == "ended":
+        return 100
+
+    covered = sum(
+        min(
+            sum(item["axis"] == axis for item in evidence),
+            axis_min_evidence,
+        )
+        for axis in AXIS_NAMES
+    )
+    coverage_ratio = covered / (len(AXIS_NAMES) * axis_min_evidence)
+    turn_ratio = min(turn / target_turns, 1)
+    return int(min(coverage_ratio, turn_ratio) * 100)
 
 
 def _start_scoring(
@@ -219,7 +260,7 @@ def _log_issues(session_id: str, turn: int, issues: list[str]) -> None:
         log_event(event, session_id=session_id, turn=turn, reason=issue)
 
 
-def _sse(event: str, data: dict[str, str]) -> str:
+def _sse(event: str, data: dict[str, str | int]) -> str:
     """Encode one named server-sent event."""
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     return f"event: {event}\ndata: {payload}\n\n"

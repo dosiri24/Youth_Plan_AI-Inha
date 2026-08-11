@@ -184,6 +184,7 @@ export default function Home() {
         <ResultScreen
           key={screen.sessionId}
           onError={showError}
+          onReturn={showStart}
           sessionId={screen.sessionId}
         />
       )}

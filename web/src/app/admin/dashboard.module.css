@@ -1,0 +1,914 @@
+/* Ported from dashboard-mock.html. Values are pixel-approved; do not "improve" them. */
+
+.root {
+  --blue: #005eb8;
+  --green: #00b2a9;
+  --ink: #16181a;
+  --ink2: #565d62;
+  --ink3: #8a9196;
+  --line: #e3e7ea;
+  --bg: #eceff2;
+  --card: #fff;
+
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #dfe3e7;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* The whole 1920x1080 stage scales as one piece. Its origin sits top-left so a
+   narrower window never clips it, and translate does the centring instead. */
+.stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1920px;
+  height: 1080px;
+  background: var(--bg);
+  transform-origin: top left;
+  display: grid;
+  grid-template-rows: 60px 56px 1fr;
+  overflow: hidden;
+}
+
+.top {
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 26px;
+}
+.brand {
+  font-weight: 800;
+  color: var(--blue);
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+.top .t {
+  font-size: 15px;
+  font-weight: 700;
+}
+.top .d {
+  font-size: 13px;
+  color: var(--ink3);
+}
+.top .sp {
+  flex: 1;
+}
+/* `font: inherit` in the shorthand voids the whole declaration and drops the
+   button to the browser default, so the family is inherited on its own. */
+.btn {
+  height: 37px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--blue);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  /* A link has to sit on the same baseline as the buttons beside it. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn.g {
+  background: #eef1f4;
+  color: var(--ink2);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.ai {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink2);
+  cursor: pointer;
+  user-select: none;
+  margin-right: 4px;
+}
+.ai input {
+  display: none;
+}
+.ai .sw {
+  width: 38px;
+  height: 22px;
+  border-radius: 11px;
+  background: #d6dce1;
+  position: relative;
+  transition: 0.15s;
+}
+.ai .sw::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: 0.15s;
+}
+.ai input:checked + .sw {
+  background: var(--green);
+}
+.ai input:checked + .sw::after {
+  transform: translateX(16px);
+}
+/* A chip appearing or disappearing must not change the heading height, or every
+   row below it shifts. The chip is fixed height and .card > h2 reserves it. */
+.aichip {
+  margin-left: auto;
+  display: none;
+  align-items: center;
+  height: 22px;
+  gap: 4px;
+  background: #e6f7f6;
+  color: #00847d;
+  border-radius: 4px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.aiRead {
+  font-size: 13px;
+  line-height: 1.75;
+  user-select: text;
+}
+.aiRead b {
+  color: #00847d;
+}
+.aion .aichip {
+  display: inline-flex;
+}
+
+/* Summary strip */
+.strip {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  padding: 0 26px;
+  gap: 0;
+}
+.st {
+  padding: 0 22px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  height: 34px;
+}
+.st:first-child {
+  padding-left: 0;
+}
+.st:last-child {
+  border-right: 0;
+}
+.st .l {
+  font-size: 12px;
+  color: var(--ink3);
+  font-weight: 600;
+}
+.st .v {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.st .v small {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink2);
+  margin-left: 2px;
+}
+/* A non-numeric value at the same size pushes the row out, but shrinking the
+   text lifts its baseline out of line with the neighbouring cells. An invisible
+   20px glyph pins the baseline where the numbers sit. */
+.st .v.txt {
+  font-size: 15px;
+}
+.st .v.txt::before {
+  content: "";
+  font-size: 20px;
+}
+.strip .sp {
+  flex: 1;
+}
+/* The caution shows only with AI mode on; off, there is nothing to warn about. */
+.aicaution {
+  display: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: #00847d;
+}
+.aion .aicaution {
+  display: block;
+}
+/* Reading by demand count or by people is the officer's call. One white pill
+   slides between the two options instead of a background swapping over. */
+.sortsw {
+  position: relative;
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 9px;
+  background: #eef1f4;
+  border-radius: 6px;
+  padding: 2px;
+}
+.sortsw .knob {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 0;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(22, 24, 26, 0.14);
+  transition:
+    transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1),
+    width 0.34s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.sortsw b {
+  position: relative;
+  z-index: 1;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink3);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    color 0.18s,
+    transform 0.12s;
+}
+.sortsw b.on {
+  color: var(--blue);
+}
+.sortsw b:active {
+  transform: scale(0.92);
+}
+
+/* Body */
+.grid {
+  display: grid;
+  grid-template-columns: 380px 1fr 380px;
+  gap: 14px;
+  padding: 14px 26px 20px;
+  min-height: 0;
+}
+.col {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+}
+.col.l {
+  grid-template-rows: 1fr auto auto;
+}
+.col.m {
+  grid-template-rows: auto auto 1fr;
+}
+/* The bottom row is split between the narrow cross table and the type list. */
+.pair {
+  display: grid;
+  grid-template-columns: 296px 1fr;
+  gap: 14px;
+  min-height: 0;
+}
+/* Section by age band */
+.hm {
+  display: grid;
+  grid-template-columns: 40px repeat(4, 1fr);
+  gap: 2px;
+  align-content: start;
+}
+.hm .hh {
+  font-size: 10.5px;
+  color: var(--ink3);
+  font-weight: 700;
+  text-align: center;
+  padding-bottom: 2px;
+}
+.hm .rl {
+  font-size: 11.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+}
+/* Nine planning sections is a fixed count, so the rows are sized to always fit. */
+.hm .cell {
+  height: 17px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.hm .cell:hover {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+.card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 15px 17px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.card > h2 {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 22px;
+}
+.card > h2 em {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--ink3);
+  font-weight: 600;
+}
+.card > h2 .r {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--ink3);
+  font-weight: 600;
+}
+.card .body {
+  margin-top: 12px;
+  flex: 1;
+  min-height: 0;
+}
+/* A card with no aggregate keeps its frame and states what is missing in one line. */
+.nodata {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 10px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink3);
+  text-align: center;
+}
+
+/* Map */
+.mapwrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 14px;
+}
+.sea {
+  flex: 1;
+  min-height: 0;
+  background: #e8eef4;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+/* Like an inset for a far-off island, this box takes the sea panel's left and
+   bottom edges as its own coastline. The component sizes it in map coordinates
+   so it never overlaps the mainland. */
+.onjin {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  background: #e8eef4;
+  border-top: 1.2px solid #16181a;
+  border-right: 1.2px solid #16181a;
+  cursor: pointer;
+}
+.onjin svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.onjin b {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 1px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #16181a;
+  text-shadow:
+    0 0 3px #e8eef4,
+    0 0 3px #e8eef4,
+    0 0 3px #e8eef4;
+}
+.onjin b span {
+  font-size: 12px;
+}
+.sea svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.dist {
+  cursor: pointer;
+  transition: 0.12s;
+}
+.dist:hover {
+  filter: brightness(0.93);
+}
+/* The browser's own focus ring belongs to the shape that owns it, so every
+   district and label drawn afterwards paints over it. The .pick box below
+   replaces it and is drawn last, which is the only way nothing can cover it.
+   Selecting follows focus here, so keyboard users still see where they are. */
+.dist:focus,
+.dist:focus-visible {
+  outline: none;
+}
+.pick {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 2.5px;
+  rx: 5px;
+  pointer-events: none;
+}
+.onjin.on {
+  box-shadow: 0 0 0 2.5px var(--blue);
+}
+.dlab {
+  font-size: 14px;
+  font-weight: 800;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke-width: 3.5px;
+}
+.dnum {
+  font-size: 13px;
+  font-weight: 800;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke-width: 3.5px;
+}
+.scale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+  font-size: 11px;
+  color: var(--ink3);
+  font-weight: 700;
+}
+.scale i {
+  flex: 1;
+  height: 10px;
+  border-radius: 5px;
+  border: 1px solid #dfe4e9;
+}
+
+/* Age */
+.agerow {
+  display: grid;
+  grid-template-columns: 54px 1fr 42px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.agerow:last-child {
+  margin-bottom: 0;
+}
+.agerow .lb {
+  font-size: 11.5px;
+  color: var(--ink2);
+  font-weight: 600;
+}
+.agerow .n {
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+.track {
+  height: 16px;
+  background: #f1f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+}
+/* Inside one age row the male bar grows from the left edge, the female bar from the right. */
+.agerow .track {
+  display: flex;
+  justify-content: space-between;
+}
+.sex {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+}
+.sex.m {
+  background: var(--blue);
+  border-radius: 0 3px 3px 0;
+  justify-content: flex-end;
+  padding-right: 4px;
+}
+.sex.f {
+  background: var(--green);
+  border-radius: 3px 0 0 3px;
+  padding-left: 4px;
+}
+.lg {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink2);
+  margin-left: 7px;
+}
+.lg::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  margin-right: 3px;
+}
+.lg.m::before {
+  background: var(--blue);
+}
+.lg.f::before {
+  background: var(--green);
+}
+
+/* Demands by section (the lead card) */
+.sect {
+  display: grid;
+  grid-template-columns: 58px 1fr 88px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.sect:hover {
+  background: #f5f8fb;
+}
+.sect.on {
+  background: #eaf2fa;
+}
+.sect .lb {
+  font-size: 13px;
+  font-weight: 700;
+}
+.sect .n {
+  font-size: 11.5px;
+  color: var(--ink3);
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+.sect .n b {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  margin-right: 2px;
+}
+.sect .track {
+  height: 19px;
+}
+
+/* Bars spreading from a centre zero end at ragged points, leaving the four axes
+   impossible to compare. Every bar gets the same width on the right, with the
+   axis name and its question set large on the left. */
+.ax {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 680px;
+  align-items: center;
+  gap: 20px;
+  padding: 9px 8px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.ax:hover {
+  background: #f5f8fb;
+}
+.ax.on {
+  background: #eaf2fa;
+}
+.ax .h b {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.ax .h span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink3);
+  font-weight: 600;
+  margin-top: 3px;
+}
+.ax .bar {
+  display: flex;
+  height: 28px;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.ax .seg {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.ax .seg.l {
+  background: var(--blue);
+  border-right: 2px solid #fff;
+  padding-left: 11px;
+}
+.ax .seg.r {
+  background: var(--green);
+  justify-content: flex-end;
+  padding-right: 11px;
+}
+.ax .cap {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+}
+
+/* Types */
+/* The list grows with the sample, so it scrolls inside the card rather than
+   pushing the fixed stage past 1080. */
+.types {
+  display: grid;
+  align-content: start;
+  gap: 1px;
+  overflow-y: auto;
+}
+.types::-webkit-scrollbar {
+  width: 5px;
+}
+.types::-webkit-scrollbar-thumb {
+  background: #dde2e6;
+  border-radius: 3px;
+}
+.ty {
+  display: grid;
+  grid-template-columns: 50px 224px 1fr 150px 34px;
+  gap: 10px;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.ty:hover {
+  background: #f5f8fb;
+}
+.ty.on {
+  background: #eaf2fa;
+}
+.ty code {
+  font-size: 10px;
+  color: var(--ink3);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.ty .nm,
+.ty .ax4 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ty .nm {
+  font-size: 12px;
+  font-weight: 600;
+}
+.ty .ax4 {
+  font-size: 11px;
+  color: var(--ink3);
+  font-weight: 600;
+}
+.ty .n {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* Right-hand context panel */
+.ctx {
+  background: #fff;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.ctx header {
+  padding: 15px 18px 12px;
+  border-bottom: 1px solid var(--line);
+}
+/* Nothing selected: no list of instructions, only what to do next. */
+.ctx .blank {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  text-align: center;
+  padding: 24px;
+}
+.ctx.empty .blank {
+  display: flex;
+}
+.ctx.empty header,
+.ctx.empty .c {
+  display: none;
+}
+.ctx .blank b {
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.ctx .blank span {
+  font-size: 12.5px;
+  color: var(--ink3);
+  font-weight: 600;
+}
+.bk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 25px;
+  padding: 0 10px 0 8px;
+  margin-bottom: 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink2);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.12s;
+}
+.bk:hover {
+  background: #f2f5f7;
+  color: var(--ink);
+}
+.ctx header .k {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--blue);
+  letter-spacing: 0.02em;
+}
+.ctx header h3 {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
+}
+.ctx header p {
+  font-size: 11.5px;
+  color: var(--ink3);
+  margin-top: 3px;
+}
+.ctx .c {
+  padding: 14px 18px 18px;
+  overflow: auto;
+  flex: 1;
+}
+.ctx .c::-webkit-scrollbar {
+  width: 5px;
+}
+.ctx .c::-webkit-scrollbar-thumb {
+  background: #dde2e6;
+  border-radius: 3px;
+}
+.ctx h4 {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ink3);
+  margin: 14px 0 6px;
+  letter-spacing: 0.02em;
+}
+.ctx h4:first-child {
+  margin-top: 0;
+}
+.ctx .li {
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 6px 0;
+  border-bottom: 1px solid #f2f5f7;
+}
+.ctx .li:last-child {
+  border-bottom: 0;
+}
+.ctx .li .m {
+  font-size: 10.5px;
+  color: var(--ink3);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.ctx .q {
+  background: #f6f9fb;
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-bottom: 7px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.ctx table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ctx td,
+.ctx th {
+  padding: 6px 7px;
+  border-bottom: 1px solid #f2f5f7;
+  text-align: left;
+}
+.ctx th {
+  font-size: 10.5px;
+  color: var(--ink3);
+  font-weight: 700;
+}
+.ctx td.num {
+  text-align: right;
+  font-weight: 700;
+}
+.ctx tbody tr {
+  cursor: pointer;
+}
+.ctx tbody tr:hover {
+  background: #f6f9fb;
+}
+.mrow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid #f2f5f7;
+}
+.mrow:last-child {
+  border-bottom: 0;
+}
+.mrow span {
+  color: var(--ink3);
+  font-weight: 600;
+}
+.mrow b {
+  font-weight: 700;
+  text-align: right;
+}
+.note {
+  background: #fff8ef;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 11.5px;
+  color: #8a4b09;
+  line-height: 1.55;
+}
+.pill {
+  display: inline-block;
+  background: #eef2f6;
+  color: var(--ink2);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+.tip {
+  position: fixed;
+  background: #16181a;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 9px;
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: 0.1s;
+  z-index: 99;
+}
+.tip.on {
+  opacity: 1;
+}

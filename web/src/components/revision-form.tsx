@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { LoaderCircle, MessageSquareText } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { AXIS_INFO, getPoleLabel } from "@/lib/city-axes";
 import type { PersonalReport, RevisionSelection } from "@/lib/api";
+
+/** The regenerate button lives in the bottom bar, so it reaches this form by id. */
+export const REVISION_FORM_ID = "revision-form";
 
 type RevisionFormProps = {
   report: PersonalReport;
   revising: boolean;
+  onReadyChange: (ready: boolean) => void;
   onRevise: (selections: RevisionSelection[], comment: string) => Promise<void>;
 };
 
@@ -22,6 +25,7 @@ function selectionKey(selection: RevisionSelection): string {
 export function RevisionForm({
   report,
   revising,
+  onReadyChange,
   onRevise,
 }: RevisionFormProps) {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
@@ -30,6 +34,10 @@ export function RevisionForm({
   const [comment, setComment] = useState("");
   const canRevise =
     selectedKeys.size > 0 && comment.trim().length > 0 && !revising;
+
+  useEffect(() => {
+    onReadyChange(canRevise);
+  }, [canRevise, onReadyChange]);
 
   const toggle = (key: string) => {
     setSelectedKeys((current) => {
@@ -107,7 +115,11 @@ export function RevisionForm({
         </div>
       )}
 
-      <form className="mt-6" onSubmit={(event) => void submit(event)}>
+      <form
+        id={REVISION_FORM_ID}
+        className="mt-6"
+        onSubmit={(event) => void submit(event)}
+      >
         <fieldset disabled={revising}>
           <legend className="sr-only">수정할 요구 문장 선택</legend>
           <div
@@ -194,21 +206,6 @@ export function RevisionForm({
             <p className="mt-3 text-[12px] font-semibold text-muted-foreground">
               선택한 문장 {selectedKeys.size}개
             </p>
-            <Button
-              className="mt-4 h-14 w-full rounded-2xl text-[15px] font-bold"
-              disabled={!canRevise}
-              type="submit"
-            >
-              {revising && (
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="size-5 animate-spin"
-                />
-              )}
-              {revising
-                ? "네 축을 다시 정리하고 있어요"
-                : "의견 반영하고 돌아가기"}
-            </Button>
           </div>
         </fieldset>
       </form>

@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>유스플랜AI 운영 대시보드 — 목업</title>
+<style>
+  :root{
+    --blue:#005EB8; --green:#00B2A9;
+    --ink:#16181a; --ink2:#565d62; --ink3:#8a9196; --line:#e3e7ea;
+    --bg:#eceff2; --card:#fff;
+    --m0:#e6eaee; --m1:#86B2DC; --m2:#2A78C2; --m3:#005EB8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#dfe3e7}
+  body{font:13px/1.5 -apple-system,"Apple SD Gothic Neo","Pretendard",system-ui,sans-serif;color:var(--ink);
+       position:relative}
+  /* 1920x1080을 통째로 축소한다. 화면 폭이 1920이 아니어도 잘리지 않도록
+     기준점을 왼쪽 위로 두고 중앙 배치는 translate가 맡는다. */
+  #stage{position:absolute;top:50%;left:50%;width:1920px;height:1080px;background:var(--bg);
+         transform-origin:top left;display:grid;grid-template-rows:60px 56px 1fr;overflow:hidden}
+
+  .top{background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:18px;padding:0 26px}
+  .brand{font-weight:800;color:var(--blue);font-size:19px;letter-spacing:-.02em}
+  .top .t{font-size:15px;font-weight:700}
+  .top .d{font-size:13px;color:var(--ink3)}
+  .top .sp{flex:1}
+  /* font 단축 속성에 inherit을 쓰면 선언 전체가 무효가 되어 버튼이 브라우저 기본 글꼴로
+     떨어진다. 글꼴 상속은 font-family로 따로 받는다 */
+  .btn{height:37px;padding:0 20px;border:0;border-radius:5px;background:var(--blue);color:#fff;
+       font-family:inherit;font-weight:700;font-size:15px;line-height:1;letter-spacing:-.02em;
+       cursor:pointer}
+  .btn.g{background:#eef1f4;color:var(--ink2)}
+  .ai{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--ink2);cursor:pointer;
+      user-select:none;margin-right:4px}
+  .ai input{display:none}
+  .ai .sw{width:38px;height:22px;border-radius:11px;background:#d6dce1;position:relative;transition:.15s}
+  .ai .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
+                 background:#fff;transition:.15s}
+  .ai input:checked+.sw{background:var(--green)}
+  .ai input:checked+.sw::after{transform:translateX(16px)}
+  /* 칩이 나타났다 사라질 때 제목 줄 높이가 바뀌면 카드 안의 모든 것이 밀린다.
+     칩 높이를 고정하고 제목 줄에 같은 높이를 미리 비워 둔다(.card>h2의 min-height) */
+  .aichip{margin-left:auto;display:none;align-items:center;height:22px;gap:4px;background:#e6f7f6;
+          color:#00847d;border-radius:4px;padding:0 9px;font-size:12px;font-weight:800;cursor:pointer}
+  .ai-read{font-size:13px;line-height:1.75;user-select:text}
+  .ai-read b{color:#00847d}
+  body.aion .aichip{display:inline-flex}
+  .goal{max-width:760px;text-align:right;line-height:1.45}
+  body.aion .goal{color:#00847d;font-weight:700}
+  .pop{position:fixed;max-width:420px;background:#0d3b39;color:#eafcfb;font-size:12.5px;line-height:1.6;
+       padding:12px 14px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.22);opacity:0;
+       pointer-events:none;transition:.12s;z-index:120}
+  .pop.on{opacity:1}
+  .pop b{color:#7fe6e0}
+
+  /* 요약 스트립 */
+  .strip{display:flex;align-items:center;background:#fff;border-bottom:1px solid var(--line);padding:0 26px;gap:0}
+  .st{padding:0 22px;border-right:1px solid var(--line);display:flex;align-items:baseline;gap:8px;height:34px}
+  .st:first-child{padding-left:0}
+  .st:last-child{border-right:0}
+  .st .l{font-size:12px;color:var(--ink3);font-weight:600}
+  .st .v{font-size:20px;font-weight:800;letter-spacing:-.02em}
+  .st .v small{font-size:12px;font-weight:700;color:var(--ink2);margin-left:2px}
+  /* 숫자가 아닌 값은 같은 크기로 두면 줄을 밀어낸다. 다만 글자를 줄이면 기준선이 함께
+     올라와 옆 칸과 어긋나므로, 보이지 않는 20px 글자를 하나 세워 기준선을 붙잡아 둔다 */
+  .st .v.txt{font-size:15px}
+  .st .v.txt::before{content:"";font-size:20px}
+  .strip .sp{flex:1}
+  /* AI 분석모드를 켰을 때만 뜨는 주의 문구 — 켜지 않았으면 경고할 대상이 없다 */
+  .aicaution{display:none;font-size:12px;font-weight:700;color:#00847d}
+  body.aion .aicaution{display:block}
+  /* 부문 정렬 전환 — 건수와 사람 수 중 무엇으로 볼지는 담당자가 고른다.
+     흰 알약은 배경을 갈아 끼우는 대신 하나가 미끄러져 옮겨 간다 */
+  .sortsw{position:relative;display:inline-flex;gap:2px;margin-left:9px;background:#eef1f4;
+          border-radius:6px;padding:2px}
+  .sortsw .knob{position:absolute;left:0;top:2px;bottom:2px;width:0;border-radius:4px;background:#fff;
+                box-shadow:0 1px 2px rgba(22,24,26,.14);
+                transition:transform .34s cubic-bezier(.34,1.56,.64,1),width .34s cubic-bezier(.34,1.56,.64,1)}
+  .sortsw b{position:relative;z-index:1;font-size:10.5px;font-weight:700;color:var(--ink3);
+            padding:2px 8px;border-radius:4px;cursor:pointer;transition:color .18s,transform .12s}
+  .sortsw b.on{color:var(--blue)}
+  .sortsw b:active{transform:scale(.92)}
+
+  /* 본문 */
+  .grid{display:grid;grid-template-columns:380px 1fr 380px;gap:14px;padding:14px 26px 20px;min-height:0}
+  .col{display:grid;gap:14px;min-height:0}
+  .col.l{grid-template-rows:1fr auto auto}
+  .col.m{grid-template-rows:auto auto 1fr}
+  /* 아래 줄은 좁은 교차표와 유형 목록이 나눠 쓴다 */
+  .pair{display:grid;grid-template-columns:296px 1fr;gap:14px;min-height:0}
+  /* 부문 × 연령대 교차 */
+  .hm{display:grid;grid-template-columns:40px repeat(4,1fr);gap:2px;align-content:start}
+  .hm .hh{font-size:10.5px;color:var(--ink3);font-weight:700;text-align:center;padding-bottom:2px}
+  .hm .rl{font-size:11.5px;font-weight:700;display:flex;align-items:center}
+  .hm .cell{height:19px;border-radius:4px;display:grid;place-items:center;font-size:11.5px;
+            font-weight:800;cursor:pointer}
+  .hm .cell:hover{outline:2px solid var(--blue);outline-offset:-2px}
+  .card{background:var(--card);border-radius:12px;padding:15px 17px;display:flex;flex-direction:column;min-height:0}
+  .card>h2{font-size:14px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:center;gap:7px;
+           min-height:22px}
+  .card>h2 em{font-style:normal;font-size:11.5px;color:var(--ink3);font-weight:600}
+  .card>h2 .r{margin-left:auto;font-size:11.5px;color:var(--ink3);font-weight:600}
+  .card .body{margin-top:12px;flex:1;min-height:0}
+
+  /* 지도 */
+  .mapwrap{flex:1;display:flex;flex-direction:column;min-height:0;margin-top:14px}
+    .sea{flex:1;min-height:0;background:#e8eef4;border-radius:10px;overflow:hidden;position:relative}
+  /* 이어도를 따로 그리듯, 바다 경계를 상자의 왼쪽·아래 변으로 삼는다.
+     크기는 본토와 겹치지 않도록 지도 좌표계에 맞춰 스크립트가 정한다 */
+  .onjin{position:absolute;left:0;bottom:0;background:#e8eef4;
+         border-top:1.2px solid #16181a;border-right:1.2px solid #16181a;cursor:pointer}
+  .onjin svg{width:100%;height:100%;display:block}
+  .onjin b{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+           align-items:center;gap:1px;font-size:13px;font-weight:800;color:#16181a;
+           text-shadow:0 0 3px #e8eef4,0 0 3px #e8eef4,0 0 3px #e8eef4}
+  .onjin b span{font-size:12px}
+  .sea svg{width:100%;height:100%;display:block}
+  .dist{cursor:pointer;transition:.12s}
+  .dist:hover{filter:brightness(.93)}
+  .dlab{font-size:14px;font-weight:800;pointer-events:none;paint-order:stroke;stroke-width:3.5px}
+
+  .dnum{font-size:13px;font-weight:800;pointer-events:none;paint-order:stroke;stroke-width:3.5px}
+  .scale{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:11px;color:var(--ink3);font-weight:700}
+  .scale i{flex:1;height:10px;border-radius:5px;border:1px solid #dfe4e9}
+
+  /* 연령 */
+  .agerow{display:grid;grid-template-columns:54px 1fr 42px;align-items:center;gap:8px;margin-bottom:7px}
+  .agerow:last-child{margin-bottom:0}
+  .agerow .lb{font-size:11.5px;color:var(--ink2);font-weight:600}
+  .agerow .n{font-size:12px;font-weight:700;text-align:right}
+  .track{height:16px;background:#f1f4f6;border-radius:4px;overflow:hidden}
+  .fill{height:100%;border-radius:0 4px 4px 0}
+  /* 연령대 한 칸 안에서 남자는 왼쪽 끝, 여자는 오른쪽 끝에서 자란다 */
+  .agerow .track{display:flex;justify-content:space-between}
+  .sex{height:100%;display:flex;align-items:center;font-size:10px;font-weight:800;color:#fff}
+  .sex.m{background:var(--blue);border-radius:0 3px 3px 0;justify-content:flex-end;padding-right:4px}
+  .sex.f{background:var(--green);border-radius:3px 0 0 3px;padding-left:4px}
+  .lg{font-size:10.5px;font-weight:700;color:var(--ink2);margin-left:7px}
+  .lg::before{content:"";display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:3px}
+  .lg.m::before{background:var(--blue)}
+  .lg.f::before{background:var(--green)}
+
+  /* 부문별 요구 (주인공) */
+  .sect{display:grid;grid-template-columns:58px 1fr 88px;align-items:center;gap:10px;
+        padding:5px 6px;border-radius:7px;cursor:pointer}
+  .sect:hover{background:#f5f8fb}
+  .sect.on{background:#eaf2fa}
+  .sect .lb{font-size:13px;font-weight:700}
+  .sect .n{font-size:11.5px;color:var(--ink3);font-weight:600;text-align:right;white-space:nowrap}
+  .sect .n b{color:var(--ink);font-size:13px;font-weight:800;margin-right:2px}
+  .sect .track{height:19px}
+
+  /* 4축 — 가운데를 0으로 두고 좌우로 뻗으면 축마다 양끝이 들쭉날쭉해 서로 견줄 수 없다.
+     막대는 모두 같은 폭으로 오른쪽에 세우고, 축 이름과 질문은 왼쪽에 크게 둔다 */
+  .ax{display:grid;grid-template-columns:minmax(0,1fr) 680px;align-items:center;gap:20px;
+      padding:9px 8px;cursor:pointer;border-radius:8px}
+  .ax:hover{background:#f5f8fb}
+  .ax.on{background:#eaf2fa}
+  .ax .h b{display:block;font-size:15px;font-weight:800;letter-spacing:-.02em}
+  .ax .h span{display:block;font-size:12.5px;color:var(--ink3);font-weight:600;margin-top:3px}
+  .ax .bar{display:flex;height:28px;border-radius:5px;overflow:hidden}
+  .ax .seg{display:flex;align-items:center;height:100%}
+  .ax .seg.l{background:var(--blue);border-right:2px solid #fff;padding-left:11px}
+  .ax .seg.r{background:var(--green);justify-content:flex-end;padding-right:11px}
+  .ax .cap{font-size:12px;font-weight:800;color:#fff;white-space:nowrap}
+
+  /* 유형 */
+  #types{display:grid;align-content:start;gap:1px}
+  .ty{display:grid;grid-template-columns:50px 224px 1fr 150px 34px;gap:10px;align-items:center;
+      padding:2px 6px;border-radius:7px;cursor:pointer}
+  .ty:hover{background:#f5f8fb}
+  .ty.on{background:#eaf2fa}
+  .ty code{font-size:10px;color:var(--ink3);font-weight:800;letter-spacing:.06em}
+  .ty .nm,.ty .ax4{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ty .nm{font-size:12px;font-weight:600}
+  .ty .ax4{font-size:11px;color:var(--ink3);font-weight:600}
+  .ty .n{font-size:11.5px;font-weight:700;text-align:right}
+
+  /* 오른쪽 컨텍스트 패널 */
+  .ctx{background:#fff;border-radius:12px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .ctx header{padding:15px 18px 12px;border-bottom:1px solid var(--line)}
+  /* 아무것도 고르지 않은 상태 — 안내를 늘어놓지 않고 무엇을 하면 되는지만 남긴다 */
+  .ctx .blank{flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;
+              gap:9px;text-align:center;padding:24px}
+  .ctx.empty .blank{display:flex}
+  .ctx.empty header,.ctx.empty .c{display:none}
+  .ctx .blank b{font-size:25px;font-weight:800;letter-spacing:-.03em}
+  .ctx .blank span{font-size:12.5px;color:var(--ink3);font-weight:600}
+  .bk{display:inline-flex;align-items:center;gap:5px;height:25px;padding:0 10px 0 8px;margin-bottom:9px;
+      border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink2);
+      font-family:inherit;font-weight:700;font-size:12px;line-height:1;cursor:pointer;transition:.12s}
+  .bk:hover{background:#f2f5f7;color:var(--ink)}
+  .ctx header .k{font-size:11px;font-weight:800;color:var(--blue);letter-spacing:.02em}
+  .ctx header h3{font-size:17px;font-weight:800;letter-spacing:-.02em;margin-top:2px}
+  .ctx header p{font-size:11.5px;color:var(--ink3);margin-top:3px}
+  .ctx .c{padding:14px 18px 18px;overflow:auto;flex:1}
+  .ctx .c::-webkit-scrollbar{width:5px}
+  .ctx .c::-webkit-scrollbar-thumb{background:#dde2e6;border-radius:3px}
+  .ctx h4{font-size:11px;font-weight:800;color:var(--ink3);margin:14px 0 6px;letter-spacing:.02em}
+  .ctx h4:first-child{margin-top:0}
+  .ctx .li{font-size:12.5px;line-height:1.6;padding:6px 0;border-bottom:1px solid #f2f5f7}
+  .ctx .li:last-child{border-bottom:0}
+  .ctx .li .m{font-size:10.5px;color:var(--ink3);font-weight:600;margin-top:2px}
+  .ctx .q{background:#f6f9fb;border-radius:8px;padding:9px 11px;margin-bottom:7px;font-size:12px;line-height:1.55}
+  .ctx .q .m{font-size:10.5px;color:var(--ink3);font-weight:600;margin-top:4px}
+  .ctx table{width:100%;border-collapse:collapse;font-size:12px}
+  .ctx td,.ctx th{padding:6px 7px;border-bottom:1px solid #f2f5f7;text-align:left}
+  .ctx th{font-size:10.5px;color:var(--ink3);font-weight:700}
+  .ctx td.num{text-align:right;font-weight:700}
+  .ctx tbody tr{cursor:pointer}
+  .ctx tbody tr:hover{background:#f6f9fb}
+  .mrow{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:5px 0;
+        border-bottom:1px solid #f2f5f7}
+  .mrow:last-child{border-bottom:0}
+  .mrow span{color:var(--ink3);font-weight:600}
+  .mrow b{font-weight:700;text-align:right}
+  .miss{color:#b4520a;font-weight:800}
+  .note{background:#fff8ef;border-radius:8px;padding:10px 12px;font-size:11.5px;color:#8a4b09;line-height:1.55}
+  .loc{display:inline-block;background:#fff1e3;color:#b4520a;border-radius:5px;padding:1px 6px;
+       font-size:10.5px;font-weight:800;margin-right:4px}
+  .pill{display:inline-block;background:#eef2f6;color:var(--ink2);border-radius:5px;padding:1px 6px;
+        font-size:10.5px;font-weight:700;margin-right:4px}
+  .tip{position:fixed;background:#16181a;color:#fff;font-size:12px;font-weight:600;padding:6px 9px;
+       border-radius:6px;pointer-events:none;opacity:0;transition:.1s;z-index:99}
+  .tip.on{opacity:1}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="top">
+    <span class="brand">유스플랜AI</span>
+    <span class="t">청년 의견 관리 플랫폼</span>
+    <span class="d" id="ranAt"></span>
+    <span class="sp"></span>
+    <label class="ai" id="aiToggle"><input type="checkbox" id="aiChk"><span class="sw"></span>AI 분석모드</label>
+    <button class="btn g">제출본 목록</button>
+    <button class="btn g" id="dl">원자료 내려받기</button>
+    <button class="btn">자료 업데이트</button>
+  </div>
+
+  <div class="strip" id="strip"></div>
+
+  <div class="grid">
+    <div class="col l">
+      <div class="card">
+        <h2>자치구별 참여자수<span class="aichip" data-ai="map">AI 해석</span></h2>
+        <div class="mapwrap" id="map"></div>
+      </div>
+      <div class="card">
+        <h2>연령 구성 <span class="r"><span id="ageRange"></span>
+          <span class="lg m">남</span><span class="lg f">여</span></span></h2>
+        <div class="body" id="ages"></div>
+      </div>
+      <div class="card">
+        <h2>조사 개요</h2>
+        <div class="body" id="meta"></div>
+      </div>
+    </div>
+
+    <div class="col m">
+      <div class="card">
+        <h2>계획 부문별 요구 <em>건수 · 언급한 사람</em>
+          <span class="sortsw" id="topicSort"><i class="knob"></i><b class="on" data-k="1">건수순</b><b data-k="2">사람수순</b></span>
+          <span class="aichip" data-ai="sect">AI 해석</span></h2>
+        <div class="body" id="topics"></div>
+      </div>
+      <div class="card">
+        <h2>도시가치 4축<span class="aichip" data-ai="axes">AI 해석</span></h2>
+        <div class="body" id="axes"></div>
+      </div>
+      <div class="pair">
+        <div class="card">
+          <h2>연령대별 요구사항 <em>요구 건수</em><span class="aichip" data-ai="cross">AI 해석</span></h2>
+          <div class="body hm" id="cross"></div>
+        </div>
+        <div class="card">
+          <h2>내가 바라는 도시 유형 <em>4축 조합 · 인원</em><span class="aichip" data-ai="types">AI 해석</span></h2>
+          <div class="body" id="types"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ctx empty" id="ctx">
+      <header><button class="bk" id="ctxBack">← 뒤로</button>
+        <div class="k" id="ck"></div><h3 id="ct"></h3><p id="cs"></p></header>
+      <div class="c" id="cc"></div>
+      <div class="blank"><b>상세 보기</b><span>자세히 보고 싶은 항목을 선택하세요</span></div>
+    </div>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+const D = {"kpi": {"participants": 12, "demands": 55, "per": 4.6, "regions": 8, "avg_turns": 14.2, "unknown": 3, "executed_at": "2026-08-10T06:41:38.688634Z", "age_min": 19, "age_max": 39}, "ages": [["19~24", 3], ["25~29", 4], ["30~34", 2], ["35~39", 3]], "regions": {"남동구": 2, "부평구": 1, "계양구": 1, "영종구": 1, "강화군": 1, "미추홀구": 1, "서해구": 1, "연수구": 1}, "topics": [["상권", 16, 10], ["안전", 15, 10], ["환경", 13, 8], ["교통", 13, 11], ["주거", 12, 10], ["일자리", 11, 11], ["문화", 10, 8], ["돌봄", 9, 9], ["교육", 4, 4]], "axis_stats": [{"poles": [{"mean_strength": 92, "letter": "A", "count": 4}, {"mean_strength": 85, "letter": "C", "count": 8}], "axis": "AC", "submission_ids": ["54d3234d-8e8b-4e1d-b17b-814d550030cb", "66a26e66-e1ba-4e2a-9d63-c46d821fd478", "7776462f-6643-49d5-b5eb-d534ab57a32e", "7f045581-b3af-419c-9aed-428b4aa95249", "84ad1217-e475-409d-a83b-0059440e48be", "8e08cf17-c9f2-47e4-a7cb-84463013a0fc", "a7fc81f8-bf14-45d4-89b0-3701e6440051", "c27805df-ba76-43a5-a8eb-8cfda1399512", "c304c4dd-5fc7-4709-aaf2-3ddc7311ef86", "cf8566eb-4a05-4edb-877e-46ae969f951c", "efe6c47f-9038-4c5a-83f2-1d0d4055c92a", "f5dea160-aa14-45ae-b98b-24733f803b09"]}, {"poles": [{"mean_strength": 87, "letter": "U", "count": 7}, {"mean_strength": 73, "letter": "N", "count": 5}], "axis": "UN", "submission_ids": ["54d3234d-8e8b-4e1d-b17b-814d550030cb", "66a26e66-e1ba-4e2a-9d63-c46d821fd478", "7776462f-6643-49d5-b5eb-d534ab57a32e", "7f045581-b3af-419c-9aed-428b4aa95249", "84ad1217-e475-409d-a83b-0059440e48be", "8e08cf17-c9f2-47e4-a7cb-84463013a0fc", "a7fc81f8-bf14-45d4-89b0-3701e6440051", "c27805df-ba76-43a5-a8eb-8cfda1399512", "c304c4dd-5fc7-4709-aaf2-3ddc7311ef86", "cf8566eb-4a05-4edb-877e-46ae969f951c", "efe6c47f-9038-4c5a-83f2-1d0d4055c92a", "f5dea160-aa14-45ae-b98b-24733f803b09"]}, {"poles": [{"mean_strength": 75, "letter": "O", "count": 6}, {"mean_strength": 79, "letter": "W", "count": 6}], "axis": "OW", "submission_ids": ["54d3234d-8e8b-4e1d-b17b-814d550030cb", "66a26e66-e1ba-4e2a-9d63-c46d821fd478", "7776462f-6643-49d5-b5eb-d534ab57a32e", "7f045581-b3af-419c-9aed-428b4aa95249", "84ad1217-e475-409d-a83b-0059440e48be", "8e08cf17-c9f2-47e4-a7cb-84463013a0fc", "a7fc81f8-bf14-45d4-89b0-3701e6440051", "c27805df-ba76-43a5-a8eb-8cfda1399512", "c304c4dd-5fc7-4709-aaf2-3ddc7311ef86", "cf8566eb-4a05-4edb-877e-46ae969f951c", "efe6c47f-9038-4c5a-83f2-1d0d4055c92a", "f5dea160-aa14-45ae-b98b-24733f803b09"]}, {"poles": [{"mean_strength": 79, "letter": "F", "count": 3}, {"mean_strength": 88, "letter": "H", "count": 9}], "axis": "FH", "submission_ids": ["54d3234d-8e8b-4e1d-b17b-814d550030cb", "66a26e66-e1ba-4e2a-9d63-c46d821fd478", "7776462f-6643-49d5-b5eb-d534ab57a32e", "7f045581-b3af-419c-9aed-428b4aa95249", "84ad1217-e475-409d-a83b-0059440e48be", "8e08cf17-c9f2-47e4-a7cb-84463013a0fc", "a7fc81f8-bf14-45d4-89b0-3701e6440051", "c27805df-ba76-43a5-a8eb-8cfda1399512", "c304c4dd-5fc7-4709-aaf2-3ddc7311ef86", "cf8566eb-4a05-4edb-877e-46ae969f951c", "efe6c47f-9038-4c5a-83f2-1d0d4055c92a", "f5dea160-aa14-45ae-b98b-24733f803b09"]}], "axis_summaries": [{"poles": [{"sentences": ["24시간 활기가 넘치고 밤낮으로 사람들의 발길이 끊이지 않는 역동적인 도시 분위기를 원합니다.", "안전한 야간 상권과 축제 활성화를 통해 지역의 생동감이 유지되기를 요구합니다."], "letter": "A"}, {"sentences": ["소음이 적고 여유로운 정온한 주거 환경과 온전한 휴식권을 보장받기를 희망합니다.", "화물차 동선 분리와 비소비형 산책로 확대를 통해 일상의 평온함과 안전을 보호하고자 합니다."], "letter": "C"}], "axis": "AC", "quotes": [{"text": "문 열고 나가면 바로 사람 지나다니고 시끄럽고. 그게 좋아요.", "submission_id": "66a26e66-e1ba-4e2a-9d63-c46d821fd478", "quote_id": "66a26e66-Q1"}, {"text": "천천히 흘러갔으면 좋겠어요. 요즘 야근 줄어서 저녁 조용한 게 좋거든요. 거리도 너무 붐비지 않았으면 하고요.", "submission_id": "54d3234d-8e8b-4e1d-b17b-814d550030cb", "quote_id": "54d3234d-Q1"}, {"text": "밤에도 불 켜진 가게가 있고 사람도 좀 다니면 덜 무서울 것 같아요.", "submission_id": "c27805df-ba76-43a5-a8eb-8cfda1399512", "quote_id": "c27805df-Q2"}, {"text": "지금처럼 좀 천천히 갔으면 해요. 새 소리나 바람 소리 들리고, 차 소리는 별로 안 났으면 좋겠네요.", "submission_id": "efe6c47f-9038-4c5a-83f2-1d0d4055c92a", "quote_id": "efe6c47f-Q1"}]}, {"poles": [{"sentences": ["5분 내 보행권 안에 상권과 의료시설 등 주요 인프라가 밀집된 고밀도 도심의 편리함을 선호합니다.", "대중교통 중심의 생활망을 강화하여 차량 없이도 일상의 모든 필요를 해결할 수 있기를 원합니다."], "letter": "U"}, {"sentences": ["자연 경관과 조화를 이루는 저밀도 환경을 지향하며 녹지 공간과 넓은 인도를 확보하고자 합니다.", "고층 빌딩보다는 낮고 소박한 건축물과 갯벌 등 고유의 자연 가치 보존을 강력히 요구합니다."], "letter": "N"}], "axis": "UN", "quotes": [{"text": "빽빽해도 괜찮아요 저는. 오히려 다닥다닥 붙어 있어야 걸어서 다 되니까 편하죠.", "submission_id": "7776462f-6643-49d5-b5eb-d534ab57a32e", "quote_id": "7776462f-Q3"}, {"text": "창문 열면 갯벌 냄새 좀 나고 새소리 들리면 좋겠어요 저 그런거 좋아하거든요 고층 빌딩 빽빽한 동네는 좀 답답해서요", "submission_id": "cf8566eb-4a05-4edb-877e-46ae969f951c", "quote_id": "cf8566eb-Q2"}, {"text": "교대 끝나고도 갈 수 있는 병원이 가까우면 좋죠. 영종은 큰 병원 가려면 다리 건너야 하니까, 밤에 갑자기 아프면 그게 제일 걱정돼요.", "submission_id": "8e08cf17-c9f2-47e4-a7cb-84463013a0fc", "quote_id": "8e08cf17-Q2"}, {"text": "논밭이 그대로 있고 멀리 바다도 보였으면 좋겠어요. 새 건물이나 큰 카페가 줄줄이 들어선 풍경은 싫고요.", "submission_id": "efe6c47f-9038-4c5a-83f2-1d0d4055c92a", "quote_id": "efe6c47f-Q2"}]}, {"poles": [{"sentences": ["인천 내에 양질의 기업과 일자리를 유치하여 서울로의 장거리 출퇴근 부담을 줄이고 자족적인 비즈니스 환경을 구축하기를 원합니다.", "직주근접을 통해 확보된 개인의 시간과 전문직 일자리 선택지의 확대를 도시 발전의 핵심으로 봅니다."], "letter": "O"}, {"sentences": ["이웃 간의 유대감과 상호 돌봄 체계를 강화하여 사람이 중심이 되는 공동체 회복을 추구합니다.", "취약 계층 지원과 의료 공백 해소 등 실질적인 복지 서비스와 정서적 연결을 중요하게 생각합니다."], "letter": "W"}], "axis": "OW", "quotes": [{"text": "일이요. 인천에 일이 있는 거. 그래야 서울 안 왔다갔다 하고 시간이랑 차비 안 버리잖아요.", "submission_id": "7776462f-6643-49d5-b5eb-d534ab57a32e", "quote_id": "7776462f-Q5"}, {"text": "동네 사람들끼리 서로 좀 도와주고 그런 거요. 애 키우면서 어린이집이나 소아과 급할 때 이웃 도움이 얼마나 큰지 느꼈거든요.", "submission_id": "54d3234d-8e8b-4e1d-b17b-814d550030cb", "quote_id": "54d3234d-Q3"}, {"text": "일자리요. 출퇴근 시간만 줄어도 나머지는 알아서 좀 나아질 것 같아서요. 시간이 있어야 걷든 쉬든 하죠.", "submission_id": "f5dea160-aa14-45ae-b98b-24733f803b09", "quote_id": "f5dea160-Q5"}, {"text": "섬에서도 제때 진료받을 수 있는 거요. 어르신이 아픈데 날씨 때문에 못 나가는 걸 보면 다른 건 그다음이라는 생각이 들어요.", "submission_id": "c304c4dd-5fc7-4709-aaf2-3ddc7311ef86", "quote_id": "c304c4dd-Q3"}]}, {"poles": [{"sentences": ["현대적인 건축물 조성과 새로운 기술의 적극적인 도입을 통해 도시의 시스템을 재구축하고 활력을 높이기를 원합니다.", "지속적인 공간 개발과 미래 산업 기반 마련이 다음 세대를 위한 중요한 과제라고 인식합니다."], "letter": "F"}, {"sentences": ["전면 재개발보다는 기존의 역사와 정취가 담긴 공간을 고쳐 쓰는 도시 재생과 주거지 보존을 선호합니다.", "익숙한 풍경과 자연 경관을 유지하며 지역의 고유성을 지키는 점진적이고 내실 있는 발전을 요구합니다."], "letter": "H"}], "axis": "FH", "quotes": [{"text": "남았으면 하는 거는 딱히 없는데요. 저는 옛날 거 지키자 그런 말에 별로 공감을 못 해서요. 낡은 데는 그냥 새로 지으면 되는 거 아닌가 싶고.", "submission_id": "7f045581-b3af-419c-9aed-428b4aa95249", "quote_id": "7f045581-Q5"}, {"text": "오래된 동네 가게나 시장은 너무 빠르게 밀려나지 않았으면 하고요.", "submission_id": "a7fc81f8-bf14-45d4-89b0-3701e6440051", "quote_id": "a7fc81f8-Q7"}, {"text": "아이들이 크면 다 떠나야 하는 곳은 아니었으면 해요. 돌아와서 일하고 살 수 있는 선택지가 조금은 있었으면 좋겠어요.", "submission_id": "c304c4dd-5fc7-4709-aaf2-3ddc7311ef86", "quote_id": "c304c4dd-Q4"}, {"text": "갯벌이랑 포구 그대로 남는거요 그거 없어지면 진짜 속상할 것 같아서", "submission_id": "cf8566eb-4a05-4edb-877e-46ae969f951c", "quote_id": "cf8566eb-Q5"}]}], "types": [["CNWH", 3, "느티나무 아래 천천히 늙어가는 이웃"], ["AUOH", 2, "발길 잦은 옛 상가의 승부사"], ["CUOF", 1, "한적한 신도시의 조용한 야심가"], ["AUWH", 1, "떠들썩한 옛 골목의 오지랖 이웃"], ["CNWF", 1, "느린 숲마을의 새 돌봄 이웃"], ["CUWH", 1, "조용한 골목의 오랜 단골"], ["AUOF", 1, "내일을 파는 밤거리의 창업가"], ["CNOH", 1, "서두르지 않는 갯벌의 오랜 어부"], ["CUOH", 1, "한산한 원도심의 알뜰한 살림꾼"]], "people": [{"nickname": "(미확인)", "age": 29, "region": "(미확인)", "code": "CNOH", "nick": "서두르지 않는 갯벌의 오랜 어부", "turns": 14, "at": "2026-08-10T06:37:48.317963Z", "summary": "2040년의 인천은 긴 출퇴근의 피로에서 벗어나 집 근처에서 일하고 쉴 수 있는 여유로운 도시이기를 바랍니다.", "demands": [{"axis": "AC", "title": "조용한 아침을 위한 주거지 소음 관리 및 휴식권 보장", "topics": ["환경", "안전"]}, {"axis": "UN", "title": "보행자 중심의 넓은 인도와 녹지 공간 확충", "topics": ["환경", "교통"]}, {"axis": "OW", "title": "직주근접 실현을 위한 지역 내 양질의 일자리 유치", "topics": ["일자리"]}, {"axis": "OW", "title": "인천 지역 내 상급 의료 인프라 강화", "topics": ["돌봄", "안전"]}, {"axis": "FH", "title": "지역 상권 보호 및 사람 중심의 포용적 도시 개발", "topics": ["상권", "주거"]}], "reasons": [{"reason": "아침의 소음과 서두름에서 벗어나 심리적 여유를 얻고, 퇴근 후에는 온전히 휴식에 집중할 수 있는 삶의 속도를 중요하게 여기시기 때문입니다.", "axis": "AC", "letter": "C"}, {"reason": "집 근처에서 자연을 접하며 걷는 즐거움과, 도보 15분 이내에 필요한 기능을 갖춘 편리한 생활 환경의 조화를 바라시기 때문입니다.", "axis": "UN", "letter": "N"}, {"reason": "인천이 단순히 잠을 자는 곳이 아니라 일자리와 의료 서비스가 지역 내에서 완결된 도시로 성장하여, 길 위에서 낭비되는 시간을 일상의 여유로 되찾기를 원하시기 때문입니다.", "axis": "OW", "letter": "O"}, {"reason": "화려한 겉모습보다는 주민들이 편안함을 느끼는 정취를 선호하며, 개발의 이익이 기존 공동체와 소상공인을 내쫓지 않는 포용적인 변화를 지향하시기 때문입니다.", "axis": "FH", "letter": "H"}]}, {"nickname": "참가자", "age": 29, "region": "남동구", "code": "CNWH", "nick": "느티나무 아래 천천히 늙어가는 이웃", "turns": 14, "at": "2026-08-10T06:35:24.061031Z", "summary": "2040년의 인천에서 알람에 쫓기지 않는 느긋한 아침을 맞이하고, 나무가 많은 길을 따라 집 근처 일터로 출근하는 일상을 꿈꿉니다.", "demands": [{"axis": "AC", "title": "비소비형 공공 휴식 공간 및 산책로 확대", "topics": ["문화", "환경"]}, {"axis": "UN", "title": "보행자 중심의 녹색 가로 환경 및 대중교통망 강화", "topics": ["교통", "환경"]}, {"axis": "OW", "title": "지역 기반 일자리 생태계 조성 및 실질적 돌봄 소득 지원", "topics": ["일자리", "돌봄"]}, {"axis": "FH", "title": "기존 상권 보존과 주거 안정을 위한 내실 있는 도시 관리", "topics": ["상권", "주거"]}], "reasons": [{"reason": "시간에 쫓기기보다 여유로운 일상을 중시하며, 소비를 목적으로 한 공간보다는 누구나 자유롭게 머물고 대화할 수 있는 공공의 쉼터를 원하기 때문입니다.", "axis": "AC", "letter": "C"}, {"reason": "대규모 업무지구나 관광 개발보다는 집 근처의 풍부한 녹지와 걷기 편한 길, 그리고 자연 생태를 보존하는 환경을 우선적인 가치로 선택하셨습니다.", "axis": "UN", "letter": "N"}, {"reason": "인천 내부의 자생적인 경제 기반을 강조하면서도, 개인이 감당하기 어려운 돌봄이나 질병 상황에서 공동체가 실질적인 소득을 보장해 주는 복지 체계를 중요하게 여기기 때문입니다.", "axis": "OW", "letter": "W"}, {"reason": "새로운 건물을 짓고 규모를 확장하기보다 기존의 동네 상권과 이미 개발된 지역을 내실 있게 관리하고, 주민들이 밀려나지 않는 주거 안정을 우선시하기 때문입니다.", "axis": "FH", "letter": "H"}]}, {"nickname": "은채", "age": 39, "region": "(미확인)", "code": "CNWF", "nick": "느린 숲마을의 새 돌봄 이웃", "turns": 14, "at": "2026-08-10T06:23:48.272579Z", "summary": "2040년의 인천에서 당신은 지금의 섬 생활처럼 느긋하고 평화로운 하루를 보내기를 꿈꿉니다.", "demands": [{"axis": "AC", "title": "정온한 생활 환경 유지를 위한 기술 운영 가이드라인 마련", "topics": ["안전", "환경"]}, {"axis": "UN", "title": "해안 경관 보호를 위한 저층 중심의 소박한 건축 지향", "topics": ["환경", "문화"]}, {"axis": "OW", "title": "섬 지역 상시 의료 공백 해소를 위한 자동화 시스템 구축", "topics": ["돌봄", "안전"]}, {"axis": "FH", "title": "청년 인구 유입을 위한 지역 기반 일자리 및 교육 환경 조성", "topics": ["일자리", "교육"]}], "reasons": [{"reason": "일상의 속도가 서두르지 않아도 자연스럽게 흘러가기를 원하시며, 기술이 도입되더라도 특유의 정적을 해치지 않는 차분한 환경을 중요하게 여기셨습니다.", "axis": "AC", "letter": "C"}, {"reason": "대규모 개발이나 거창한 건물보다는 현재의 바다와 갯벌 경관을 그대로 유지하고, 자연의 생태계를 존중하는 소박한 건축을 지향하셨습니다.", "axis": "UN", "letter": "N"}, {"reason": "외부인을 위한 관광 시설 확충보다 현재 거주하는 아이들과 어르신들의 실질적인 안전과 복지를 최우선으로 생각하며 정책의 우선순위를 정하셨습니다.", "axis": "OW", "letter": "W"}, {"reason": "전통적인 섬 공동체의 가치를 지키면서도 첨단 기술을 활용해 정주 여건을 개선하고, 다음 세대가 다시 돌아와 살 수 있는 지속 가능한 미래를 그리고 계십니다.", "axis": "FH", "letter": "F"}]}, {"nickname": "소윤", "age": 19, "region": "(미확인)", "code": "AUOH", "nick": "발길 잦은 옛 상가의 승부사", "turns": 13, "at": "2026-08-10T06:22:00.054454Z", "summary": "소윤 님은 졸업 후 서울로 떠나지 않고도 인천 안에서 충분한 일자리 기회를 얻어 정착하는 삶을 원합니다.", "demands": [{"axis": "AC", "title": "안전하고 활기찬 야간 상권 조성", "topics": ["상권", "안전", "문화"]}, {"axis": "UN", "title": "사람 중심의 정겨운 생활 소음이 있는 거리", "topics": ["주거", "상권"]}, {"axis": "OW", "title": "청년 및 사회초년생 취업 지원 강화", "topics": ["일자리"]}, {"axis": "OW", "title": "30분 이내 신속한 대중교통 체계 구축", "topics": ["교통"]}, {"axis": "FH", "title": "옛 건물을 활용한 도시 재생 및 공간 보존", "topics": ["문화", "상권"]}], "reasons": [{"reason": "조용한 분위기보다는 활발한 상점가와 북적이는 사람들 속에서 에너지를 얻고, 밤늦게까지 안전하게 활동할 수 있는 환경을 중요하게 여기십니다.", "axis": "AC", "letter": "A"}, {"reason": "자동차 소음 같은 기계적인 소리보다 가게 문 여는 소리나 사람들의 대화 소리가 들리는 정겨운 생활권의 풍경을 원하고 계십니다.", "axis": "UN", "letter": "U"}, {"reason": "청년들의 인천 정착을 위한 일자리 확보를 최우선으로 꼽으셨으며, 이동 시간을 단축하여 삶의 효율성을 높이는 것을 강조하셨습니다.", "axis": "OW", "letter": "O"}, {"reason": "새로운 대형 건물을 짓기보다 지역의 역사와 기억이 담긴 옛 건물과 골목의 모습을 보존하며 활용하는 방식을 훨씬 선호하십니다.", "axis": "FH", "letter": "H"}]}, {"nickname": "가영", "age": 21, "region": "남동구", "code": "CNWH", "nick": "느티나무 아래 천천히 늙어가는 이웃", "turns": 17, "at": "2026-08-10T06:18:37.431886Z", "summary": "2040년 인천에서 갯벌 냄새와 새소리를 맡으며 여유롭게 아침을 맞이하고 싶습니다.", "demands": [{"axis": "AC", "title": "일상의 여백을 보장하는 여유로운 생활 환경", "topics": ["주거", "교통"]}, {"axis": "UN", "title": "갯벌과 자연이 숨 쉬는 저밀도 도시 경관", "topics": ["환경"]}, {"axis": "OW", "title": "사람 중심의 촘촘한 지역 사회 돌봄 체계", "topics": ["돌봄", "일자리"]}, {"axis": "FH", "title": "익숙한 풍경을 지키며 채워가는 점진적 발전", "topics": ["문화", "환경"]}], "reasons": [{"reason": "매일 바쁜 일상을 보내기보다 평일에는 조용한 동네에서 여유를 찾고, 가끔은 소래포구의 북적임 속에서 활력을 얻는 완급 조절이 있는 삶을 원하셨습니다.", "axis": "AC", "letter": "C"}, {"reason": "고층 건물이 가득한 답답한 풍경 대신, 갯벌 냄새와 새소리가 들리는 자연 친화적인 환경에서 마음의 안정을 얻는 것을 더 소중하게 여기셨습니다.", "axis": "UN", "letter": "N"}, {"reason": "경제적인 성장이나 첨단 기술의 발전보다는, 실무 현장에서 느낀 일손 부족 문제를 해결하고 사람을 귀하게 여기는 따뜻한 돌봄 시스템을 우선하셨습니다.", "axis": "OW", "letter": "W"}, {"reason": "대규모 쇼핑몰이나 새로운 시설이 들어오기보다, 소래포구와 갯벌처럼 지금 인천이 가진 고유한 풍경이 2040년에도 그대로 남아 있기를 강하게 바라셨습니다.", "axis": "FH", "letter": "H"}]}, {"nickname": "성민", "age": 37, "region": "부평구", "code": "CUWH", "nick": "조용한 골목의 오랜 단골", "turns": 13, "at": "2026-08-10T06:17:25.384578Z", "summary": "2040년의 인천에서 성민 님은 정든 부평의 아파트 단지에서 가족, 이웃과 함께 평온한 일상을 보내는 미래를 그리셨습니다.", "demands": [{"axis": "AC", "title": "조용하고 여유로운 생활 환경 조성", "topics": ["환경", "안전"]}, {"axis": "UN", "title": "도보 중심의 생활권 편의성 강화", "topics": ["교통", "상권"]}, {"axis": "OW", "title": "이웃 간 상호 돌봄 및 관계 회복", "topics": ["돌봄", "안전"]}, {"axis": "FH", "title": "기존 산업 안정 지원 및 주거지 보전", "topics": ["일자리", "주거"]}], "reasons": [{"reason": "성민 님은 북적이는 도심의 활기보다는 야근 없는 저녁의 정적함과 여유롭게 흘러가는 일상을 더 중요하게 생각하셨기에 이같이 판정되었습니다.", "axis": "AC", "letter": "C"}, {"reason": "차를 타지 않고도 집 주변 상가와 아파트를 걸어서 오가는 생활 양식을 선호하시며, 멀리 나가기보다 동네 안에서 모든 것을 해결하고 싶어 하셨습니다.", "axis": "UN", "letter": "U"}, {"reason": "경제적 성공이나 화려한 시설보다는 급할 때 서로를 돕는 이웃 관계와 돌봄의 가치가 우리 삶을 더 풍요롭게 만든다고 믿으시는 점이 반영되었습니다.", "axis": "OW", "letter": "W"}, {"reason": "오래된 아파트라도 정든 곳을 허물기보다는 고쳐서 쓰고 싶어 하셨고, 익숙한 동네 풍경이 사라지는 것에 대한 큰 아쉬움을 표현하셨습니다.", "axis": "FH", "letter": "H"}]}, {"nickname": "준호", "age": 32, "region": "계양구", "code": "CUOH", "nick": "한산한 원도심의 알뜰한 살림꾼", "turns": 14, "at": "2026-08-10T06:16:38.634029Z", "summary": "준호 님은 2040년 인천에서 출퇴근의 부담 없이 여유롭고 조용한 일상을 보내기를 꿈꿉니다.", "demands": [{"axis": "AC", "title": "보행 안전을 위한 산업 차량 동선 분리", "topics": ["안전", "교통"]}, {"axis": "UN", "title": "생활권 내 의료 서비스 및 주민 편의시설 확충", "topics": ["돌봄", "상권"]}, {"axis": "OW", "title": "직주근접 일자리 유지 및 교대 맞춤형 교통 지원", "topics": ["일자리", "교통"]}, {"axis": "FH", "title": "계양산 자연 경관 보전 및 저밀도 주거 관리", "topics": ["환경", "주거"]}], "reasons": [{"reason": "당신은 인파가 몰리는 대형 상권보다는 동네 주민들이 조용히 이용할 수 있는 환경을 선호하며, 일상의 평온함이 방해받지 않는 도시를 중요하게 여기십니다.", "axis": "AC", "letter": "C"}, {"reason": "당신은 병원과 같은 필수 시설이 도보 10분 거리 안에 갖춰져 있어, 차를 타지 않고도 생활의 모든 필요를 집 근처에서 해결하는 편리함을 바라십니다.", "axis": "UN", "letter": "U"}, {"reason": "당신은 출퇴근에 소모되는 시간과 비용을 아끼는 것을 최우선으로 생각하시기에, 집과 가까운 인천 내 일터와 효율적인 교통망 구축을 희망하십니다.", "axis": "OW", "letter": "O"}, {"reason": "당신은 빽빽한 아파트 숲이 생기는 것보다 계양산과 같은 자연 풍경이 지금의 모습 그대로 보존되어 걷기 좋은 환경이 유지되기를 간절히 원하십니다.", "axis": "FH", "letter": "H"}]}, {"nickname": "지우", "age": 25, "region": "영종구", "code": "AUOH", "nick": "발길 잦은 옛 상가의 승부사", "turns": 14, "at": "2026-08-10T06:15:00.132640Z", "summary": "지우 님은 2040년 인천 영종에서 탁 트인 바다와 하늘을 곁에 두고 생동감 넘치는 일상을 보내기를 바랍니다.", "demands": [{"axis": "AC", "title": "지역 활력을 높이는 축제와 문화 행사 활성화", "topics": ["문화", "상권"]}, {"axis": "UN", "title": "영종 내 24시간 생활 밀착형 인프라 확충", "topics": ["돌봄", "교통", "안전"]}, {"axis": "OW", "title": "공항 연계 전문 일자리 창출 및 유연한 교육 지원", "topics": ["일자리", "교육"]}, {"axis": "FH", "title": "해안 조망권 보호를 위한 계획적 개발 관리", "topics": ["환경", "주거"]}], "reasons": [{"reason": "정적인 환경보다는 사람들이 모이고 무언가 활발하게 일어나는 도시의 생동감과 북적이는 에너지를 중요하게 생각하시기 때문입니다.", "axis": "AC", "letter": "A"}, {"reason": "외부 지역으로 이동할 필요 없이 거주하는 지역 안에서 의료, 교통, 교육 등 모든 생활 필수 기능이 완결성 있게 갖춰지길 지향하시기 때문입니다.", "axis": "UN", "letter": "U"}, {"reason": "일자리가 먼저 생겨야 사람이 모이고 기반 시설이 따라온다는 관점에서, 지역 경제의 성장과 개인의 직무적 발전을 최우선 가치로 두시기 때문입니다.", "axis": "OW", "letter": "O"}, {"reason": "현대적인 개발을 긍정하면서도 영종만이 가진 특색 있는 자연 조망과 해안가의 개방감은 타협할 수 없는 고유한 가치로 여기시기 때문입니다.", "axis": "FH", "letter": "H"}]}, {"nickname": "태영", "age": 35, "region": "강화군", "code": "CNWH", "nick": "느티나무 아래 천천히 늙어가는 이웃", "turns": 14, "at": "2026-08-10T06:11:59.363538Z", "summary": "2040년 태영 님은 강화의 논밭과 바다 풍경이 그대로 보존된 환경 속에서 자연의 소리를 들으며 평화로운 아침을 맞이합니다.", "demands": [{"axis": "AC", "title": "저소음과 여유가 보장되는 생활 속도 유지", "topics": ["환경", "안전"]}, {"axis": "UN", "title": "자연 경관 보전과 거점 중심 시설 확충", "topics": ["환경", "주거"]}, {"axis": "OW", "title": "상호 돌봄 체계 및 주민 참여 기반 행정", "topics": ["돌봄", "안전"]}, {"axis": "OW", "title": "실질적인 생활 편의를 위한 공유 및 보수 지원", "topics": ["주거", "상권"]}, {"axis": "FH", "title": "기존 인프라 개선 중심의 교통망 내실화", "topics": ["교통"]}, {"axis": "FH", "title": "지역의 고유성을 지키는 지속 가능한 관광 관리", "topics": ["문화", "상권"]}], "reasons": [{"reason": "도시의 성급한 발전보다는 소음 없이 고즈넉한 강화의 일상과 그 속에 사는 사람들의 속도가 존중받는 평온함을 최우선으로 여기십니다.", "axis": "AC", "letter": "C"}, {"reason": "삶의 터전인 논밭과 바다가 훼손되는 것을 경계하며, 현대적 편의 시설이 들어오더라도 자연경관만큼은 반드시 지켜내야 한다는 원칙을 가지고 계십니다.", "axis": "UN", "letter": "N"}, {"reason": "행정 주도의 일방적 변화보다는 마을회관에서 이웃과 직접 소통하고, 취약한 이웃을 마을 공동체가 함께 돌보는 정이 있는 관계를 중시하십니다.", "axis": "OW", "letter": "W"}, {"reason": "새로운 도로 개발이나 대규모 관광지 조성보다 오래된 집을 고쳐 쓰고 옛길의 풍경을 간직하며 지역의 고유한 가치를 보존하는 미래를 꿈꾸십니다.", "axis": "FH", "letter": "H"}]}, {"nickname": "도현", "age": 23, "region": "미추홀구", "code": "AUWH", "nick": "떠들썩한 옛 골목의 오지랖 이웃", "turns": 14, "at": "2026-08-10T06:06:37.749156Z", "summary": "2040년에도 도현 님은 태어나 자란 미추홀구 주안의 북적이는 골목 안에서 활기찬 하루를 보내고 싶어 합니다.", "demands": [{"axis": "AC", "title": "24시간 활기가 넘치는 안전하고 시끌벅적한 거리 조성", "topics": ["상권", "안전"]}, {"axis": "UN", "title": "기존 교통 인프라를 활용한 도심 접근성 유지", "topics": ["교통"]}, {"axis": "OW", "title": "동네 이웃과의 유대감을 지키는 상권 공동체 보호", "topics": ["상권", "돌봄"]}, {"axis": "OW", "title": "지역 거점의 생활 밀착형 일자리 기회 확대", "topics": ["일자리"]}, {"axis": "FH", "title": "철거 중심이 아닌 공간 재생 정책 추진", "topics": ["주거", "상권"]}, {"axis": "FH", "title": "소규모 노포의 디지털 접근성 개선 지원", "topics": ["상권", "교육"]}], "reasons": [{"reason": "조용한 환경보다 사람들이 끊임없이 오가는 북적거림 속에서 혼자가 아니라는 든든함을 느끼기에 활기찬 도시의 속도를 선호하십니다.", "axis": "AC", "letter": "A"}, {"reason": "자연의 한적함보다는 빽빽하게 들어선 상점가와 역세권의 편리함을 중시하며, 생활 반경 안에서 모든 것이 해결되는 도시적 삶을 원하십니다.", "axis": "UN", "letter": "U"}, {"reason": "화려한 경제 성장보다는 어릴 적부터 마주해온 이웃들과의 연결과 관계의 지속성을 삶의 핵심 가치로 꼽으며 지역에 대한 애착을 드러내셨습니다.", "axis": "OW", "letter": "W"}, {"reason": "멀쩡한 건물을 허물고 새 건물을 짓기보다, 정든 동네의 정취를 유지하면서 낡은 곳을 수선해 사용하는 지속 가능한 변화를 지지하십니다.", "axis": "FH", "letter": "H"}]}, {"nickname": "민서", "age": 30, "region": "서해구", "code": "AUOF", "nick": "내일을 파는 밤거리의 창업가", "turns": 15, "at": "2026-08-10T06:06:00.553848Z", "summary": "2040년의 인천은 바이오 산업의 성장을 통해 시민들에게 더 넓은 직업적 선택지를 제공하는 기회의 도시가 되길 바랍니다.", "demands": [{"axis": "AC", "title": "활발한 일상이 보장되는 활기찬 도시 환경 조성", "topics": ["상권", "문화"]}, {"axis": "UN", "title": "생활 밀착형 편의 인프라의 도보권 확충", "topics": ["교통", "문화"]}, {"axis": "OW", "title": "산업 성장 및 기업 유치를 통한 일자리 다양성 확보", "topics": ["일자리"]}, {"axis": "OW", "title": "1인 가구 주거 지원 및 밤길 안전 시스템 강화", "topics": ["주거", "안전"]}, {"axis": "FH", "title": "미래 기술 도입과 현대적 도시 재구축", "topics": ["주거", "안전"]}], "reasons": [{"reason": "조용하고 한적한 분위기보다는 사람들이 북적이고 활발하게 움직이는 소리가 들리는 활기찬 도시의 리듬에서 에너지를 얻으시는군요.", "axis": "AC", "letter": "A"}, {"reason": "일상의 모든 필요가 집 근처에서 효율적으로 해결되길 바라며, 불필요한 이동 시간을 줄여주는 도시의 편리함을 중요하게 생각하십니다.", "axis": "UN", "letter": "U"}, {"reason": "인천 내에서 다양한 기업 유치를 통해 일자리 선택지가 넓어지기를 기대하면서도, 개인의 삶을 지탱하는 주거와 안전이라는 기본 가치 또한 놓치지 않으려 하십니다.", "axis": "OW", "letter": "O"}, {"reason": "옛것을 보존하는 것보다 새로운 기술과 인프라를 통해 도시가 현대적으로 변화하고 생활이 더욱 편리해지는 쪽을 더 선호하는 모습이 뚜렷합니다.", "axis": "FH", "letter": "F"}]}, {"nickname": "하은", "age": 27, "region": "연수구", "code": "CUOF", "nick": "한적한 신도시의 조용한 야심가", "turns": 14, "at": "2026-08-10T06:05:03.452261Z", "summary": "2040년 하은 님은 서울로 이동하는 소모적인 시간을 줄이고 인천 안에서 경제 활동과 휴식이 모두 완결되는 자족적인 삶을 지향합니다.", "demands": [{"axis": "AC", "title": "혼잡 없는 쾌적한 이동과 적정한 도시 활기", "topics": ["교통", "안전"]}, {"axis": "UN", "title": "5분 내 보행권 기반의 고밀도 도심 인프라", "topics": ["상권", "교통"]}, {"axis": "OW", "title": "인천 내 기업 유치와 자족적 비즈니스 환경 구축", "topics": ["일자리"]}, {"axis": "FH", "title": "지속적인 공간 개발과 신기술 도입", "topics": ["문화", "교육"]}], "reasons": [{"reason": "아침의 평온함과 쫓기지 않는 여유를 중요하게 여기시기 때문입니다. 너무 텅 빈 적막함보다는 적당한 온기가 느껴지되, 출퇴근길의 혼잡함 같은 소모적인 에너지는 피하고 싶어 하는 모습에서 하은 님이 바라는 일상의 속도를 읽었습니다.", "axis": "AC", "letter": "C"}, {"reason": "자연 속의 휴식보다 반듯한 건물이 늘어선 도시의 편리함을 더 선호하시기 때문입니다. 걷는 거리 안에 모든 것이 갖춰진 고밀도 환경을 편안하게 느끼며, 생활에 필요한 인프라가 집 근처에 집약되기를 바라십니다.", "axis": "UN", "letter": "U"}, {"reason": "하은 님께 가장 중요한 가치는 시간의 효율성입니다. 서울로 오가는 세 시간을 아껴 자신의 삶에 집중하기 위해, 인천이 단순한 거주지를 넘어 비즈니스가 활발히 이루어지는 경제적 중심지가 되기를 강력히 원하고 계십니다.", "axis": "OW", "letter": "O"}, {"reason": "과거의 모습을 유지하기보다 새로운 기술이나 공간의 변화를 긍정적으로 받아들이는 태도를 보여주셨기 때문입니다. 빈 땅이 새로운 기능으로 채워지고, AI와 같은 최신 기술을 일상에서 자연스럽게 활용하며 도시가 계속해서 발전해 나가기를 기대하십니다.", "axis": "FH", "letter": "F"}]}], "cross": {"상권": [7, 4, 2, 3], "안전": [2, 4, 3, 6], "환경": [2, 5, 1, 5], "교통": [3, 5, 3, 2], "주거": [3, 3, 3, 3], "일자리": [3, 4, 2, 2], "문화": [3, 3, 2, 2], "돌봄": [2, 3, 1, 3], "교육": [1, 2, 0, 1]}};
+
+/* 16:9 고정 — 화면에 맞춰 통째로 축소 */
+function fit(){
+  const s=Math.min(innerWidth/1920, innerHeight/1080);
+  stage.style.transform=`translate(${-960*s}px, ${-540*s}px) scale(${s})`;
+}
+addEventListener('resize',fit); fit();
+
+const AX={AC:{t:'생활 리듬',q:'하루가 어떤 속도로 흐르길 바라는가',p:{A:'활기찬',C:'여유로운'}},
+          UN:{t:'선호 공간',q:'집을 나섰을 때 어떤 풍경을 원하는가',p:{U:'도시적인',N:'자연친화'}},
+          OW:{t:'우선 가치',q:'도시가 무엇을 먼저 챙기길 바라는가',p:{O:'기회',W:'돌봄'}},
+          FH:{t:'발전 가치',q:'변화를 어떻게 받아들이는가',p:{F:'새로움',H:'이야기'}}};
+/* 계획 부문 대응 — 담당자가 어느 과 소관인지 바로 알게 한다 */
+const SECT={일자리:'산업·경제',주거:'주택',교통:'교통',문화:'문화·관광',환경:'환경·공원녹지',
+            돌봄:'복지',안전:'방재·안전',교육:'교육',상권:'상업·도심'};
+const el=h=>{const d=document.createElement('div');d.innerHTML=h.trim();return d.firstChild};
+const tip=document.getElementById('tip');
+const hov=(n,t)=>{n.addEventListener('mousemove',e=>{tip.textContent=t;tip.classList.add('on');
+  tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY-32)+'px'});
+  n.addEventListener('mouseleave',()=>tip.classList.remove('on'))};
+
+/* 요약 스트립 */
+const k=D.kpi;
+document.getElementById('ranAt').textContent =
+  new Date(k.executed_at).toLocaleString('ko-KR',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})+' 기준';
+const stats=[['참여자수',k.participants,'명'],['수집된 세부 요구',k.demands,'건'],
+  ['참여 자치구수',k.regions+' / 11','곳'],['참여 목적','2045 인천도시기본계획','']];
+document.getElementById('strip').innerHTML =
+  stats.map(([l,v,u])=>`<div class="st"><span class="l">${l}</span>
+    <span class="v${u?'':' txt'}">${v}${u?`<small>${u}</small>`:''}</span></div>`).join('')
+  + `<div class="sp"></div>
+     <div class="aicaution">AI가 생성한 해석입니다. 외부에 인용하기 전 수치를 직접 확인하시기 바랍니다.</div>`;
+
+const MAP={"vw":460,"vh":543,"d":[{"name":"제물포구","d":"M181.8 332.4L186.4 341.3L181.8 341.4L178.8 333L181.5 341.4L182.7 358.5L191.6 358.6L204.3 333.3L208.1 335.3L203.9 343.6L214.3 348.9L211.7 354L203.4 349.7L200.7 355L210.1 359.8L203.4 372.5L231.8 372.7L227.6 343.7L228.5 344.2L227.7 337.5L227.7 337.4L227.7 337.4L232.3 334.4L240.2 318.7L240.2 318.7L247 314.5L244.6 307.4L244.6 307.4L246.4 307.7L253.4 309.1L259.1 307.5L257.4 306.9L257.4 306.8L259.4 302.2L257.5 300L257.1 299.5L257.1 299.4L258.3 297.5L260.3 294.3L258.7 291L257.9 289.4L257.9 289.4L261 285.1L280.7 296.8L285.9 298.5L286 296.6L282 295.3L276 289.6L242.7 266.1L237.6 267.8L237 265.9L225.6 270L231.3 278.3L240.4 286L238.6 288.2L239.8 286.1L227.8 276.7L224.6 272.1L221.4 272.1L221.1 277L220 272.5L213.9 274.8L214.7 277.3L213 275.2L211.1 275.9L212.7 280.5L211.4 281.4L209.8 277L207.1 278.1L208.6 282.3L207.2 282.8L205.7 278.7L202.9 279.7L205.3 286L208.5 284.7L209.3 286.8L206.8 287.6L208.7 293.3L205.6 288.3L196.8 291.6L196.1 289.5L202.9 286.9L200.6 280.7L198.4 281.5L199.9 285.7L198.6 286.2L197.8 284L193.8 284.7L195.3 292.1L193.1 288.1L191 289.2L183.5 309.7L187.2 308.1L190.7 312.9L190.8 315.1L178.7 317.3L180.6 327.1L183.7 329.3L193.1 323.5L194 325L192.3 326.2L194.5 329.5L187.4 333.8Z","x":220,"y":315},{"name":"영종구","d":"M42.7 349.3L53.1 331.2L69.6 314.9L106 299.2L125.2 297.6L144.9 292.2L160.4 278.1L167.5 275.9L168.2 272.9L165.8 271.4L166.5 269.9L163.9 271.9L165.1 269.9L160.2 253.2L150.7 246.7L146.2 237.4L142 234.5L144.5 232.4L141.8 234.4L131.2 230L122.1 230.8L114.7 227.5L117.1 222L114 224.6L102.3 219.4L95.9 219.9L93.6 218.9L94.5 215.2L90.6 210L84.3 208.8L83.4 204.4L77.6 203.7L75.2 205.8L75.1 209.1L74.3 206.4L67 209.9L65.4 209.8L64.8 206.8L64 209.1L60.3 209.7L57.8 218.3L63.6 217.4L65.3 219.4L57.3 220.1L55.2 237L62.1 237L57.3 237.9L54.3 247.1L30.9 260.1L27.7 261.3L26.9 260L26 261.5L25.5 260.3L24.8 261.7L2.6 260.2L4.5 258.7L-6 262.4L-6 382.7ZM128 213L136.4 224.9L158.2 224.9L158.3 214.4L163.4 219L165.3 217.8L158.1 211.4L158.2 198.6L161 197.7L159.9 188.8L145.6 194.9L118.4 222.2Z","x":70,"y":281},{"name":"미추홀구","d":"M285.9 298.5L280.7 296.8L261 285.1L257.9 289.4L260.3 294.3L259.3 292.3L260.3 294.3L258.8 296.7L257.1 299.4L259.4 302.2L257.4 306.8L259.1 307.5L253.4 309.1L244.6 307.4L247 314.5L240.2 318.7L232.3 334.4L227.7 337.4L230.8 345.2L227.6 343.7L231.8 372.7L234.4 369.3L236.3 372.4L249.4 371.3L251.4 362.9L253 362.1L253.7 362L254.2 361.8L253.7 362L254.2 362L255.4 362L254.2 363L254.3 365L260.7 364.3L267 363.6L267.2 363.7L287.7 372.1L289.5 370.4L289.6 370.4L289.7 370.4L300.2 372.3L302.4 366.9L315.8 366.7L312.8 358.7L325.3 358.2L321.9 357.5L322.6 351.3L314 348.8L313.9 348.8L313.6 348.7L313.3 348.3L309.9 343.8L309.6 343.3L309.5 338.1L311.5 338.2L311.9 326.1L315.3 322.1L315.3 322L315 321.7L309.4 314.9L301.9 314.1L302.4 309.7L299.1 308.8L298.7 308.7L300.5 305.3L300.9 304.6L297.5 302.4L285.9 298.8ZM228.5 344.2L230.8 345.2L227.7 337.5Z","x":273,"y":336},{"name":"연수구","d":"M327.4 366.5L325.3 358.2L312.8 358.7L315.8 366.7L302.4 366.9L300.2 372.3L289.7 370.4L289.6 370.4L289.5 370.4L287.7 372.1L267.2 363.7L273.5 367.6L267 363.6L259.4 364.5L254.3 365L254.2 363L255.4 362L253 362.1L251.4 362.9L249.4 371.3L236.3 372.4L235 371.1L239 389.8L234.7 392.1L232.4 377.8L200.6 378L196.5 380.4L191.6 389.5L180.3 384.3L180.3 378.1L177 378.1L177 389.9L185.3 395.7L202.9 394.9L203 423.5L200.8 425.2L200.8 431.1L203 432.8L203.1 442.1L211.2 454.6L260.5 492.7L252.2 503.3L245.7 506L244.4 505.8L244.5 494.4L168.5 494.7L168.5 506.8L209.1 506.5L209.3 513.5L209.6 506.5L219.4 506.5L219.5 515.6L242.7 515.6L242.6 506.4L247.2 506L251.4 504.1L253.8 501.8L260.6 492.8L271.8 501.5L291.3 477L298.6 482.7L302.3 479.8L315.1 461.5L314.8 451.7L312.5 449.3L296.6 446L299.5 442.1L285 439.4L276.2 434L290.7 418.7L298.6 413.7L302.2 403.8L302.2 404L317.1 389.7L324.8 379.7Z","x":253,"y":430},{"name":"남동구","d":"M332.8 291.9L329.1 309L325.1 308.5L322.8 311.6L316.6 309.8L316 311L301.8 305L303.4 306.4L300.9 304.6L298.7 308.7L302.4 309.7L301.9 314.1L309.4 314.9L315.3 322L311.9 326.1L311.5 338.2L309.5 338.1L309.6 343.3L313.6 348.7L322.6 351.3L321.9 357.5L325.3 358.2L325.3 358.2L325.7 359.8L327.4 365.7L327.3 366.1L327.4 366.5L326.9 368.8L325 378.7L324.8 379.7L324.6 380L317.1 389.7L302.1 404L298.6 413.7L290.7 418.7L276.2 434L285 439.4L299.5 442.1L298.9 444.4L299.9 442.8L340.8 451.8L341.8 450.6L339.2 449.4L343.2 448.2L346 449.7L367.5 424.9L368.8 426.1L375.4 419.7L374.5 412.8L384.1 408.3L382.1 408.2L385.3 403.4L386.6 394.7L389.6 392.1L387.3 384.5L393.9 380.8L394.7 377.7L401.8 379.1L407.8 376.8L410.4 370.5L407.6 369.5L410.4 362.2L406.6 350.8L410.3 346.1L409.3 344.3L410.9 341.4L420.4 338.6L422.3 332.2L418.3 328.7L420.2 324.6L418.8 319.6L421.5 314.6L421 310.6L419.4 305L411.4 304.1L406 305L404.7 306.9L392.2 309.2L387.1 315.9L387.8 316L381.8 314.7L382.7 314.9L381.7 314.6L378.3 316.7L377.7 316L372.6 308.9L358.5 303L352.3 307.6L347.7 307.8L343.8 301.2L334.1 295.8ZM316.5 310.1L309.6 308.3L316 311Z","x":353,"y":372},{"name":"부평구","d":"M312 270.8L309.2 271.2L311.8 270.9L315.6 274.9L315.7 274.9L315.9 279.2L318.4 282.3L318.3 283.6L310.7 283L306.1 286.6L307.3 293.2L298.6 302.1L299.2 302.7L301.8 305L301.8 305L309.6 308.3L316.5 310.1L316.6 309.8L322.8 311.6L325.1 308.5L329.1 309L332.8 291.9L334.1 295.8L343.8 301.2L343.8 301.3L347.7 307.8L352.3 307.6L358.5 303L370.6 308L368.8 306L370.6 308.1L372.6 308.9L377.7 316L378.3 316.7L381.7 314.6L382.7 314.9L387.1 315.9L392.2 309.2L404.7 306.9L405 306.4L405.1 302L394.9 296.7L389.5 290.2L390.3 287L383.2 282.9L373.3 280.4L372.5 267.2L375.1 256.6L372.2 244.7L375 242.6L377.9 234.8L379.4 236.1L383 236.6L387.6 232.1L396.3 233.5L396.5 220.2L378.2 220.4L370.7 220.5L304.9 221.1L304.9 221.1L301 224L297.3 231.6L297.3 233L297.4 235.7L298.1 236.4L301.9 239.4L301.9 239.5L302 239.6L303.1 245.5L304.6 246.7L304.2 250.8L304.2 250.9L308.7 256.6L308.8 256.6L304.9 261.6L309.1 266.3L309.2 266.5L309.6 266.9L309.6 266.9L308 271.3L309 271.2Z","x":346,"y":265},{"name":"계양구","d":"M324.8 167.3L327.2 166.7L330 169.6L330.2 169.8L334.3 174.1L334.3 174.1L329.6 184.6L326.5 186.6L327.3 188.1L328.2 189.9L328.2 189.9L328.1 189.9L318.7 193.5L318.7 193.5L318.6 193.5L317.3 192.3L315.9 191L315.7 191L309.8 192.5L309.4 192.6L308.1 200.7L308.1 200.7L308 200.8L306.6 200.9L298.7 202.1L297.5 204.7L296.9 208.6L297 208.8L297 208.8L297 208.8L297.8 208.9L297.2 208.8L298.1 208.9L302.1 209.5L304.8 220.6L304.9 221.1L396.5 220.2L396.2 201.7L399.4 192.9L397.9 191.4L401 189.7L399 188.7L401.8 179.7L400.8 178.5L403.3 178.1L400.9 176.8L404.5 173L404.2 170.4L401.8 169.5L404.4 166.8L411.9 166.9L413 166L411.1 164.2L416.3 158.9L419 162.1L415 149.6L416 148.6L417.4 152.2L420.7 148.4L422.1 149.7L423.8 147.1L422.4 145.1L425.1 144.9L423.5 143.8L424.8 140.1L432.1 135.8L433.6 136.8L432.6 134.8L435.4 133.2L436.3 127.3L438.7 134.6L439.4 126.9L430.8 120.6L427 125.4L424.6 123.1L412.1 121.2L405.6 116L400.1 121.6L393.4 121L390.4 124.9L390.5 129.1L385.4 130.3L382.5 127.9L382.6 122.7L377 115.5L375.8 109.4L369.1 109.1L369 107.4L366.1 108.6L366.1 111.8L365.9 112.2L365.6 112.6L356.4 108.9L350.3 111.3L344.3 115.5L342.3 117.4L342.2 117.6L341.9 126.9L341.8 126.9L341.8 127L340.4 128.6L336.3 133.5L336.3 133.5L328.8 129.9L312.6 127.6L300.7 123.1L296.3 123.6L295.6 123.7L295.1 126.1L294.5 129.6L295.5 132.7L296.1 134.3L300.7 136.1L304.8 134.2L305.7 135.4L307.1 137.4L313.1 139L316.1 139.7L316.1 139.8L316.2 139.8L319.8 142.8L317 149.4L316.9 149.6L319.1 153.5L319.1 153.5L322.9 154.3L322.8 155.2L322.3 157.6L319.7 163.1L318.9 164.8L321.7 168Z","x":364,"y":167},{"name":"서해구","d":"M268.8 145L264.3 149.5L257.3 147L256.4 149.1L249.6 151.8L245.9 150.5L242.6 150.6L239.8 154.2L242 156.5L237.7 160.2L238.2 161.6L240.1 160L240.9 162.9L236.8 162.7L237.5 160.6L228.9 165.2L203 170.5L203 170.5L199.8 171.1L199.6 171.1L187.3 177.9L188.1 179.7L185.9 180.5L188.5 194.9L196.7 194.9L196.6 196.3L188.6 196.3L189.3 205.4L193.6 205.3L193.7 214.2L204.3 214.3L204.4 215.6L193.7 215.7L193.8 232L206.8 234.5L207.6 238.8L202.2 238.4L203.2 234.5L193.9 232.7L194.4 238.2L197.2 241.9L195.6 243.7L196.1 265.9L219.5 265.3L219.4 263.6L224.5 263.5L229.8 258.5L229.8 252.4L241 252.4L242.7 266.1L272.9 286.7L282 295.3L286 296.6L285.9 298.8L297.5 302.4L303.4 306.4L298.6 302.1L307.3 293.2L306.1 286.6L310.7 283L318.3 283.6L318.4 282.3L315.9 279.2L315.7 274.9L311.8 270.9L308 271.3L309.6 266.9L304.9 261.6L308.8 256.6L304.2 250.9L304.6 246.7L303.1 245.5L302 239.6L301.9 239.5L301.9 239.4L298 236.3L298 236.3L297.4 235.7L297.3 233L297.3 231.6L301 224L304.9 221.1L302.1 209.5L297 208.8L296.9 208.6L297.5 204.7L298.7 202.1L306.6 200.9L308 200.8L308.1 200.7L308.1 200.7L309.4 192.6L309.8 192.5L315.7 191L315.9 191L317.3 192.3L318.6 193.5L328.2 189.9L327.3 188.1L326.5 186.6L329.6 184.6L334.3 174.1L327.2 166.7L324.7 167.3L321.7 168L318.9 164.8L322.3 157.6L308.3 153.1L298.1 144.8L285 147.3L276.3 141.9L268.7 142.3ZM133 136.7L138.2 138.3L137.1 140.7L144.2 144.2L146.3 143.1L150.7 145.4L153.2 142.1L150.7 140.3L147.3 140.7L144.4 137.2L142.9 138.5L133.4 131.5Z","x":259,"y":214},{"name":"검단구","d":"M206.3 111.3L199.6 116.5L206.9 116.8L207.7 120.1L219.3 119.7L218.7 132.4L219.3 130.2L221 132.6L225 129.9L224.2 126.1L232.7 118.8L231 116.6L232.9 117.5L233.8 120.2L241.5 120.7L250.6 130.9L251.4 128.9L260.8 133.8L264.3 130.5L272.2 132.8L268.8 141.2L239.1 144.2L214.7 152.4L211.3 150.4L179.9 150.9L175.9 146.1L173.1 151.1L177.8 158.2L181.4 156.1L183.2 156.5L183.2 159.6L191.7 159.6L191.4 164.3L199.4 171.2L199.6 171.1L199.8 171.1L203 170.5L203 170.5L228.9 165.2L237.5 160.6L236.8 162.7L240.9 162.9L240.1 160L238.2 161.6L237.7 160.2L242 156.5L239.8 154.2L242.6 150.6L245.9 150.5L249.6 151.8L256.4 149.1L257.3 147L264.3 149.5L268.8 145L268.7 142.3L276.3 141.9L285 147.3L298.1 144.8L308.3 153.1L322.3 157.6L322.9 154.3L319.1 153.5L316.9 149.6L319.8 142.8L316.1 139.8L316.1 139.7L313.1 139L307.1 137.4L304.8 134.2L300.7 136.1L296.1 134.3L295.5 132.7L294.5 129.6L294.7 128.1L294.9 127.4L295.6 123.7L296.3 123.6L300.7 123.1L312.6 127.6L328.8 129.9L336.3 133.5L341.8 127L341.8 126.9L341.9 126.9L342.2 117.6L342.3 117.4L344.3 115.5L351.8 110.2L347.5 103.7L339.8 98L338.9 91L336 92.4L333.9 89.1L331.2 88.9L324.9 93.2L324 89.6L326.7 84.8L325.8 77.5L320 74.1L316.5 68.3L311.7 64.2L306.5 63.4L297.9 56.3L296.8 57L293.8 49.7L286.3 48.8L283.4 42.3L269.5 37.8L266 34.5L261.6 35.7L257.8 33.2L256.6 34.4L256.5 40.2L250.8 52.6L247.7 51L241.3 53.8L237.6 51.6L237.3 64L231 69.1L231.3 73.3L226 86.8L222.9 89.7L223.3 92.8L220.6 93.7L220.7 91.8L214.8 90.4L212 91.4L208.7 87L202.4 89.8L194.9 98.8L179.4 108.5L183 122.9L186 126.2L193.1 126.1L192.2 121.3L201.1 115.1L202.6 110Z","x":267,"y":103},{"name":"강화군","d":"M-5.7 104.9L-0.8 107.2L5.6 106.2L11.3 109.4L13.1 113.4L14 111.2L13.9 112.8L14.7 113L13.9 105.4L16.4 102.5L20.2 102.7L34.5 97.4L32.9 90.5L36 87L47.9 95L54.7 96.6L56.5 101.7L57.2 98.7L60.3 98.4L68 101.5L76.1 101.2L81.5 94.9L80.2 94.4L81.8 93.5L82.2 86.5L83.8 87.2L89.7 82.7L88 80.8L88.6 77.6L107.3 72.6L107.7 66.7L117.1 66.4L118.2 64.4L112.8 56.5L112.9 53.8L110.5 55L109.6 59L107.4 59.5L106 50.9L109.2 48.3L108.2 47L105.9 48.8L102.7 41.6L103.2 36.7L99.4 33.9L95.2 21.2L89 20.6L94.2 20.6L96.3 18.4L90.2 10.7L91.2 4.3L95.2 -1.2L93.6 -1.9L94.7 -1.5L95.9 -0.8L104.1 -2.5L103.5 -6L-6 -6L-6 104.9ZM69.7 115.2L69.8 118.6L73.9 118.7L76.8 125.2L84.4 127.9L86.7 125.4L87.3 118.9L91 117.1L95 118.9L96.1 117.6L94.8 112.5L88.6 112.2L85.5 108.4L85.2 106.2L92.5 99.6L86.1 98.1L83.5 99.2L78.7 106.9L66.6 111.2Z","x":49,"y":50}],"inset":{"w":176,"h":120,"d":"M119.8 103.7L119.1 103.1L118.8 103.2L118.5 104.3L118.8 105.0L118.3 104.9L118.5 104.4L117.9 103.7L118.6 102.6L119.9 103.1L119.8 103.7ZM99.1 48.4L100.2 48.3L100.1 49.3L99.1 49.2L99.1 48.4ZM96.7 41.8L99.6 41.4L99.8 42.1L98.6 43.8L97.4 44.4L96.7 41.8ZM18.7 33.3L19.6 31.3L22.1 31.3L21.6 32.5L20.6 32.0L18.7 33.3ZM13.2 26.8L14.5 26.9L15.3 25.3L16.6 24.6L16.5 23.9L17.1 24.5L18.5 24.9L17.4 25.9L17.6 26.4L17.8 26.0L17.7 27.6L16.5 28.6L16.1 28.2L16.4 28.2L16.5 28.0L15.5 28.2L14.7 29.1L15.2 27.7L13.2 26.8ZM9.0 12.4L9.4 10.5L11.2 11.6L13.9 10.3L14.9 10.5L15.0 10.0L15.5 10.5L17.8 10.2L20.1 12.6L20.0 12.8L19.5 12.8L19.5 12.7L19.4 12.7L19.3 12.6L19.3 12.5L19.2 12.5L19.0 12.8L19.2 12.5L19.3 12.4L19.0 12.3L18.7 12.8L19.2 12.9L19.4 13.2L18.2 13.1L16.9 14.1L16.2 14.8L16.6 15.3L16.3 16.7L15.3 17.1L14.7 16.4L11.1 16.2L10.2 13.1L9.0 12.4ZM121.1 108.5L122.4 108.1L122.1 108.8L123.2 108.9L122.9 109.4L124.2 109.3L122.4 110.0L122.4 109.4L121.1 108.5ZM119.6 92.8L120.6 92.4L120.6 91.7L121.5 91.8L121.7 92.5L119.6 92.8ZM127.9 101.8L128.4 100.9L129.4 100.7L130.2 101.6L128.5 103.3L128.0 102.7L129.0 102.0L127.9 101.8ZM146.7 94.3L147.0 93.8L148.5 94.2L149.5 95.2L148.0 95.5L148.2 95.1L146.7 94.3ZM143.1 93.8L144.3 93.2L146.0 95.5L143.2 94.3L143.1 93.8ZM129.8 93.6L130.7 92.4L131.5 93.4L132.2 93.0L131.6 94.1L132.2 94.2L131.8 94.8L130.6 94.6L129.8 93.6ZM141.0 93.1L141.5 92.5L143.3 93.0L142.4 93.5L141.0 93.1ZM135.9 88.7L136.8 88.3L137.7 90.2L138.8 90.2L138.0 91.6L137.4 90.0L136.1 90.1L135.9 88.7ZM129.9 88.6L130.5 87.6L130.2 86.3L131.3 83.6L131.9 83.9L132.1 85.3L132.9 85.7L132.5 86.3L133.4 85.9L134.7 86.8L134.4 87.3L136.4 88.0L134.6 88.9L135.0 89.7L132.6 90.2L131.9 89.7L132.4 89.6L132.2 88.5L131.4 89.1L131.6 88.3L130.8 88.0L130.3 88.9L129.9 88.6ZM145.9 85.0L146.4 83.8L150.1 85.5L150.4 84.8L151.5 85.1L150.8 86.1L149.0 86.7L148.7 86.1L145.9 85.0ZM129.1 82.1L129.7 82.0L130.8 83.2L130.1 83.4L129.1 82.1ZM164.8 85.6L165.7 85.1L167.0 87.9L166.0 87.5L166.1 86.5L164.8 85.6ZM158.1 84.6L158.7 84.4L158.6 83.5L159.7 83.8L160.2 83.2L159.9 82.7L161.5 82.2L163.7 83.2L163.4 83.9L164.1 85.2L163.8 85.7L162.9 85.0L162.9 85.7L162.0 85.7L162.5 86.9L161.5 87.2L161.6 87.8L160.5 88.7L160.1 88.3L160.5 87.2L159.9 86.8L159.4 86.9L159.3 88.0L158.3 87.8L158.1 84.6ZM158.2 58.2L160.4 55.6L161.7 56.3L161.7 57.2L161.2 57.2L161.4 58.9L160.2 58.2L158.9 58.7L158.2 58.2ZM157.0 57.7L157.7 55.3L159.1 55.5L158.5 55.7L157.9 57.8L157.0 57.7ZM148.2 53.9L150.6 54.8L151.1 56.1L151.9 56.5L154.4 56.1L154.5 56.9L150.9 57.5L150.5 57.0L149.7 57.8L149.9 55.9L148.2 53.9Z","n":22}};
+
+/* 인천 지도 — 2026년 7월 개편 경계를 단순화한 형상. 본토를 크게 보이도록 잘라 냈고
+   화면 밖으로 나가는 옹진군은 좌측 아래 별도 박스로 둔다.
+   지도 상자 크기를 재야 하므로 다른 카드가 다 채워진 뒤에 호출한다. */
+function drawMap(){
+  const counts=Object.values(D.regions), max=Math.max(...counts);
+  // 흰색 → 인천 블루 한 색 그라데이션. 0명은 가장 옅은 쪽이다.
+  const fill=n=>`rgb(${Math.round(255-(255-0)*n/max)},${Math.round(255-(255-94)*n/max)},${Math.round(255-(255-184)*n/max)})`;
+  const ink=n=>n/max>0.55?'#fff':'#3d4448';
+  const halo=n=>n/max>0.55?'rgba(0,50,100,.55)':'rgba(255,255,255,.85)';
+  const IN=MAP.inset;                                 // 옹진군 삽입 지도
+  const NUDGE={제물포구:[-16,-6]};   // 해안을 따라 좁은 구만 조금 밀어 준다
+  let g='';
+  MAP.d.forEach(d=>{
+    const n=D.regions[d.name]||0;
+    g+=`<path class="dist" data-d="${d.name}" data-n="${n}" d="${d.d}" fill="${fill(n)}"
+          stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>`;
+  });
+  MAP.d.forEach(d=>{
+    const n=D.regions[d.name]||0;
+    const [dx,dy]=NUDGE[d.name]||[0,0];
+    g+=`<text class="dlab" style="fill:${ink(n)};stroke:${halo(n)}" x="${d.x+dx}" y="${d.y+dy}" text-anchor="middle">${d.name}</text>`
+     + `<text class="dnum" style="fill:${ink(n)};stroke:${halo(n)}" x="${d.x+dx}" y="${d.y+dy+17}" text-anchor="middle">${n}명</text>`;
+  });
+  const nOj=D.regions['옹진군']||0;
+  const wrap=document.getElementById('map');
+  wrap.innerHTML=`<div class="sea"></div>
+    <div class="scale"><span>0명</span>
+      <i style="background:linear-gradient(90deg,#fff,rgb(0,94,184))"></i>
+      <span>${max}명</span></div>`;
+  const sea=wrap.querySelector('.sea');
+  /* 지도를 상자에 여백 없이 맞춘다. 여백이 남으면 강화군이 상자 안쪽에서 잘려
+     잘린 자국이 그대로 보인다. 축척은 그대로 두고 남는 쪽으로만 viewBox를 늘린다. */
+  const s=Math.min(sea.clientWidth/MAP.vw, sea.clientHeight/MAP.vh);
+  const vw=sea.clientWidth/s, vh=sea.clientHeight/s;
+  /* 옹진군 상자가 차지할 자리 — 연수구 남단(x 168)과 영종구(y 387)를 피한 크기 */
+  const OJ=[142,130];
+
+  sea.innerHTML=
+   `<svg viewBox="0 0 ${vw} ${vh}" preserveAspectRatio="xMidYMid meet">
+      <defs><clipPath id="clip"><rect width="${vw}" height="${vh}"/></clipPath></defs>
+      <g clip-path="url(#clip)">${g}</g>
+    </svg>
+    <div class="onjin dist" data-d="옹진군" data-n="${nOj}"
+         style="width:${OJ[0]*s}px;height:${OJ[1]*s}px">
+      <svg viewBox="0 0 ${IN.w} ${IN.h}" preserveAspectRatio="xMidYMid meet">
+        <path d="${IN.d}" fill="${fill(nOj)}" stroke="#16181a" stroke-width="0.6"/></svg>
+      <b>옹진군<span>${nOj}명</span></b></div>`;
+
+  document.querySelectorAll('.dist').forEach(el2=>{
+    const n=+el2.dataset.n, nm=el2.dataset.d;
+    hov(el2, n? `${nm} ${n}명` : `${nm} 참여자 없음`);
+    el2.onclick=()=>showRegion(nm,n);
+  });
+}
+
+
+/* 연령 */
+document.getElementById('ageRange').textContent=`${k.age_min}~${k.age_max}세`;
+/* 성별은 아직 인터뷰에서 받지 않는다. 막대 모양을 확정하려고 넣은 임시 값이며,
+   실제로는 분석 결과가 연령대별 남·여 수를 함께 내려주게 된다 */
+const SEX={'19~24':[1,2],'25~29':[2,2],'30~34':[1,1],'35~39':[2,1]};
+{
+  const mx=Math.max(...D.ages.map(a=>a[1]));
+  D.ages.forEach(([lb,n])=>{
+    const [m,f]=SEX[lb];
+    const r=el(`<div class="agerow"><div class="lb">${lb}세</div>
+      <div class="track">
+        <div class="sex m" style="width:${m/mx*100}%">${m||''}</div>
+        <div class="sex f" style="width:${f/mx*100}%">${f||''}</div>
+      </div>
+      <div class="n">${n}명</div></div>`);
+    hov(r,`${lb}세 ${n}명 — 남 ${m}명 · 여 ${f}명`);
+    document.getElementById('ages').append(r);
+  });
+}
+
+/* 계획 부문별 요구 */
+/* 건수 1위와 언급한 사람 1위가 갈리므로 어느 쪽으로 볼지 고를 수 있어야 한다 */
+function drawTopics(k){
+  const rows=[...D.topics].sort((a,b)=>b[k]-a[k]);
+  const mx=rows[0][k];
+  const box=document.getElementById('topics');
+  box.innerHTML='';
+  rows.forEach(([t,cnt,ppl])=>{
+    const r=el(`<div class="sect" data-t="${t}">
+      <div class="lb">${t}</div>
+      <div class="track"><div class="fill" style="width:${rows.find(x=>x[0]===t)[k]/mx*100}%;background:var(--blue)"></div></div>
+      <div class="n"><b>${k===1?cnt:ppl}</b>${k===1?'건 · '+ppl+'명':'명 · '+cnt+'건'}</div></div>`);
+    hov(r,`${t} (${SECT[t]}) — 요구 ${cnt}건, 12명 중 ${ppl}명이 언급`);
+    r.onclick=()=>showTopic(t,cnt,ppl);
+    box.append(r);
+  });
+}
+drawTopics(1);
+{
+  const sw=document.getElementById('topicSort'), knob=sw.querySelector('.knob');
+  /* 알약을 켜진 칸에 맞춰 옮긴다. 두 칸의 글자 수가 달라 폭도 함께 따라간다 */
+  const slide=instant=>{const b=sw.querySelector('b.on');
+    if(instant) knob.style.transition='none';   // 첫 배치까지 미끄러지면 로딩이 어수선해진다
+    knob.style.width=b.offsetWidth+'px';
+    knob.style.transform=`translateX(${b.offsetLeft}px)`;
+    if(instant) requestAnimationFrame(()=>knob.style.transition='');};
+  sw.onclick=e=>{
+    const b=e.target.closest('b[data-k]');
+    if(!b || b.classList.contains('on')) return;
+    sw.querySelectorAll('b').forEach(n=>n.classList.toggle('on',n===b));
+    slide();
+    drawTopics(+b.dataset.k);
+  };
+  slide(true);
+}
+
+/* 4축 */
+D.axis_stats.forEach(s=>{
+  const m=AX[s.axis],[L,R]=s.poles,tot=L.count+R.count;
+  const a=el(`<div class="ax" data-a="${s.axis}"><div class="h"><b>${m.t}</b><span>${m.q}</span></div>
+    <div class="bar">
+      <div class="seg l" style="width:${L.count/tot*100}%"><span class="cap">${m.p[L.letter]} ${L.count}명</span></div>
+      <div class="seg r" style="width:${R.count/tot*100}%"><span class="cap">${m.p[R.letter]} ${R.count}명</span></div>
+    </div></div>`);
+  hov(a,`${m.t} — 눌러서 극별 요구 경향과 발언 보기`);
+  a.onclick=()=>showAxis(s.axis);
+  document.getElementById('axes').append(a);
+});
+
+
+/* 연령대별 요구사항 — 값이 클수록 진한 한 색 */
+{
+  const BANDS=['19~24','25~29','30~34','35~39'];
+  const all=Object.values(D.cross).flat(), mx=Math.max(...all);
+  const shade=v=>v===0?'#f2f5f7':`rgba(0,94,184,${0.12+0.78*v/mx})`;
+  const wrap=document.getElementById('cross');
+  wrap.append(el('<div class="hh"></div>'));
+  BANDS.forEach(b=>wrap.append(el(`<div class="hh">${b}세</div>`)));
+  D.topics.forEach(([t])=>{
+    wrap.append(el(`<div class="rl">${t}</div>`));
+    D.cross[t].forEach((v,i)=>{
+      const c=el(`<div class="cell" style="background:${shade(v)};color:${v/mx>0.55?'#fff':'var(--ink2)'}">${v||''}</div>`);
+      hov(c,`${BANDS[i]}세가 말한 ${t} 요구 ${v}건`);
+      c.onclick=()=>showTopic(t, D.topics.find(x=>x[0]===t)[1], D.topics.find(x=>x[0]===t)[2]);
+      wrap.append(c);
+    });
+  });
+}
+
+/* 도시 유형 — 4축 판정이 어떤 조합으로 모였는지. 네 글자 코드만으로는 읽히지 않아
+   축마다 어느 쪽으로 기운 조합인지 풀어 적는다 */
+const spell=c=>['AC','UN','OW','FH'].map((a,i)=>AX[a].p[c[i]]).join(' · ');
+{
+  const mx=D.types[0][1];
+  D.types.forEach(([code,n,nick])=>{
+    const r=el(`<div class="ty" data-c="${code}"><code>${code}</code>
+      <div class="nm">${nick}</div>
+      <div class="ax4">${spell(code)}</div>
+      <div class="track"><div class="fill" style="width:${n/mx*100}%;background:var(--blue)"></div></div>
+      <div class="n">${n}명</div></div>`);
+    hov(r,`${nick} — ${spell(code)}`);
+    r.onclick=()=>showType(code,nick,n);
+    document.getElementById('types').append(r);
+  });
+}
+
+/* 오른쪽 패널 */
+const ctxBox=document.getElementById('ctx');
+function ctx(kind,title,sub,html,sel){
+  document.getElementById('ck').textContent=kind;
+  document.getElementById('ct').textContent=title;
+  document.getElementById('cs').textContent=sub;
+  document.getElementById('cc').innerHTML=html;
+  document.querySelectorAll('.sect.on,.ax.on,.ty.on').forEach(n=>n.classList.remove('on'));
+  if(sel) document.querySelector(sel)?.classList.add('on');
+  document.getElementById('cc').scrollTop=0;
+  ctxBox.classList.remove('empty');
+}
+/* 이 패널은 왼쪽에서 고른 것을 펼쳐 보는 자리다. 고른 것이 없으면 비워 둔다 */
+function clearCtx(){
+  ctxBox.classList.add('empty');
+  document.querySelectorAll('.sect.on,.ax.on,.ty.on').forEach(n=>n.classList.remove('on'));
+}
+document.getElementById('ctxBack').onclick=clearCtx;
+function bindPeople(){
+  document.querySelectorAll('#cc tbody tr[data-i]').forEach(tr=>{
+    tr.onclick=()=>showPerson(D.people[+tr.dataset.i]);
+  });
+}
+function showTopic(t,cnt,ppl){
+  const items=[];
+  D.people.forEach(p=>p.demands.forEach(d=>{ if(d.topics.includes(t)) items.push({p,d}); }));
+  ctx('계획 부문', `${t} · ${SECT[t]}`, `요구 ${cnt}건 · 12명 중 ${ppl}명이 언급`,
+    `<h4>이 부문으로 들어온 요구</h4>`+
+    `<div class="li" style="color:#b4520a;font-weight:700">언급 장소 확보 0건 — 요구별 장소 추출은 다음 단계입니다</div>`+
+    items.map(({p,d})=>`<div class="li">${d.title}
+      <div class="m">${p.region} · ${p.age}세 ${d.topics.filter(x=>x!==t).map(x=>`<span class="pill">${x}</span>`).join('')}</div></div>`).join('')
+,
+    `.sect[data-t="${t}"]`);
+}
+function showAxis(ax){
+  const m=AX[ax], s=D.axis_stats.find(x=>x.axis===ax), su=D.axis_summaries.find(x=>x.axis===ax);
+  let h=`<h4>수치</h4><table><tr><th>극</th><th style="text-align:right">인원</th></tr>`+
+    s.poles.map(p=>`<tr><td>${m.p[p.letter]}</td><td class="num">${p.count}명</td></tr>`).join('')+'</table>';
+  su.poles.forEach(p=>{ h+=`<h4>${m.p[p.letter]} 쪽 요구 경향</h4>`;
+    p.sentences.forEach(x=>h+=`<div class="li">${x}</div>`); });
+  h+='<h4>청년들이 실제로 한 말</h4>'+
+    su.quotes.map(q=>`<div class="q">“${q.text}”</div>`).join('');
+  ctx('도시가치 축', m.t, m.q, h, `.ax[data-a="${ax}"]`);
+}
+function showRegion(name,n){
+  const ppl=D.people.filter(p=>p.region===name);
+  ctx('군·구', name, n? `${n}명 참여` : '아직 참여자가 없습니다',
+    n ? '<table><thead><tr><th>별명</th><th>나이</th><th>도시 유형</th></tr></thead><tbody>'+
+        ppl.map(p=>`<tr data-i="${D.people.indexOf(p)}"><td>${p.nickname}</td><td class="num">${p.age}</td><td>${p.nick}</td></tr>`).join('')+
+        '</tbody></table><h4>이 지역에서 나온 요구</h4>'+
+        ppl.flatMap(p=>p.demands.map(d=>`<div class="li">${d.title}<div class="m">${p.nickname} · ${d.topics.map(x=>`<span class="pill">${x}</span>`).join('')}</div></div>`)).join('')
+      : `<div class="note">이 군·구에서는 아직 참여자가 없습니다. 홍보를 어디에 더 해야 하는지 판단하는 근거로 씁니다.</div>`);
+  bindPeople();
+}
+function showType(c,nick,n){
+  const ppl=D.people.filter(p=>p.code===c);
+  ctx('내가 바라는 도시 유형', nick, `${spell(c)} · ${n}명`,
+    '<h4>이 유형으로 나온 사람</h4>'+
+    ppl.map(p=>`<div class="li">${p.summary}<div class="m">${p.nickname} · ${p.region} · ${p.age}세</div></div>`).join(''),
+    `.ty[data-c="${c}"]`);
+}
+function showPerson(p){
+  ctx('참여자', p.nickname, `${p.region} · ${p.age}세 · ${p.nick}`,
+    `<h4>인터뷰 요약</h4><div class="li">${p.summary}</div>
+     <h4>축별 판정 이유</h4>`+
+    p.reasons.map(r=>`<div class="li">${r.reason}<div class="m">${AX[r.axis].t}</div></div>`).join('')+
+    `<h4>이 사람이 낸 요구 ${p.demands.length}건</h4>`+
+    p.demands.map(d=>`<div class="li">${d.title}<div class="m">${d.topics.map(x=>`<span class="pill">${x}</span>`).join('')}</div></div>`).join('')+
+    `<div class="note" style="margin-top:14px">목업입니다. 실제로는 여기서 원본 대화록 전문으로 이어집니다.</div>`);
+}
+/* AI 해석 — 실제 구현에서는 분석 실행 때 집계와 해설을 함께 넣어 한 번 생성해 저장한다 */
+const AI={
+ map:'참여가 <b>검단구·제물포구·옹진군</b> 세 곳에서 0명입니다. 원도심과 도서 지역이 통째로 비어 있어, 지금 수치를 인천 청년 전체의 의견으로 읽으면 안 됩니다. 홍보 경로를 이 세 지역에 먼저 넣는 것이 표본을 넓히는 가장 빠른 방법입니다.',
+ sect:'건수 1위는 상권(16건)이지만 <b>언급한 사람 수로는 교통·일자리가 11명</b>으로 가장 넓습니다. 상권은 소수가 여러 번 말한 주제이고, 교통과 일자리는 거의 모두가 한 번씩 말한 주제입니다. 계획서에 우선순위를 적을 때는 뒤쪽이 더 강한 근거입니다. 교육은 4건·4명으로 가장 얇아, 질문이 닿지 않은 것인지 실제 관심이 낮은 것인지 확인이 필요합니다.',
+ axes:'네 축 중 <b>발전 가치만 9대 3으로 뚜렷하게 기울었습니다.</b> 보존을 원하는 청년이 압도적으로 보이지만, 인터뷰 마무리에 "그대로 남았으면 하는 것"을 묻는 문항이 있어 답이 보존 쪽으로 끌렸을 가능성이 있습니다. 이 수치는 정책 근거로 쓰기 전에 질문 방식을 함께 검토해야 합니다. 나머지 세 축은 6대 6에서 8대 4 사이로, 인천 청년의 지향이 하나로 모이지 않는다는 뜻입니다.',
+ cross:'<b>19~24세는 상권(7건), 35~39세는 안전(6건)과 환경(5건)</b>에 몰립니다. 같은 청년이라도 생애주기에 따라 도시에 요구하는 것이 갈립니다. 청년 정책을 하나의 묶음으로 설계하면 두 집단 모두 만족하지 못할 수 있습니다.',
+ types:'12명이 서로 다른 유형 <b>9개</b>로 흩어졌고 가장 많은 유형도 3명입니다. 이 표본으로 인천 청년의 대표 유형을 말할 단계는 아닙니다. 다만 9개 유형 중 6개(9명)가 이야기(H)로 끝나, 4축에서 본 보존 쏠림이 조합에서도 그대로 나타납니다.'
+};
+const AITITLE={map:'자치구별 참여자수',sect:'계획 부문별 요구',axes:'도시가치 4축',
+               cross:'연령대별 요구사항',types:'내가 바라는 도시 유형'};
+document.querySelectorAll('.aichip').forEach(c=>{
+  c.onclick=()=>ctx('AI 해석', AITITLE[c.dataset.ai], '이 카드의 수치가 무엇을 시사하는가',
+    `<div class="ai-read">${AI[c.dataset.ai]}</div>
+     <div class="note" style="margin-top:14px">AI가 이번 분석 결과와 축 해설을 함께 읽고 쓴 문장입니다. 그대로 복사해 보고자료에 쓸 수 있습니다. 판단의 근거는 왼쪽 수치이며, 인용 전에 수치를 함께 확인하십시오.</div>`);
+});
+document.getElementById('aiChk').onchange=e=>{
+  document.body.classList.toggle('aion', e.target.checked);
+};
+
+/* 조사 개요 — 조사 기간은 제출본에 찍힌 응답 시각의 최소·최대를 그대로 쓴다 */
+{
+  const ds=D.people.map(p=>new Date(p.at)).sort((a,b)=>a-b);
+  const f=d=>d.toLocaleDateString('ko-KR',{month:'long',day:'numeric'});
+  document.getElementById('meta').innerHTML=[
+    ['조사 성격', '도시기본계획에 대한 청년층 의견 수렴'],
+    ['조사 기간', f(ds[0])+' ~ '+f(ds[ds.length-1])],
+    ['조사 방법', '유스플랜AI를 활용한 1:1 인터뷰'],
+    ['모집 경로', '인천시청 홈페이지 및 SNS를 통한 QR코드 홍보']
+  ].map(([k2,v])=>`<div class="mrow"><span>${k2}</span><b>${v}</b></div>`).join('');
+}
+
+/* 원자료 내려받기 — 요구 전수를 표로 뽑는다. 백엔드 없이 화면의 데이터로 만든다 */
+document.getElementById('dl').onclick=()=>{
+  const q=v=>`"${String(v).replace(/"/g,'""')}"`;
+  const rows=[['참여자','거주 군·구','나이','계획 부문','요구','언급 장소']];
+  D.people.forEach((p,i)=>{
+    const id='P'+String(i+1).padStart(2,'0');
+    p.demands.forEach(d=>d.topics.forEach(t=>rows.push([id,p.region,p.age,t,d.title,''])));
+  });
+  const blob=new Blob(['\ufeff'+rows.map(r=>r.map(q).join(',')).join('\r\n')],
+                      {type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='유스플랜AI_청년의견_원자료.csv'; a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+drawMap();
+</script>
+</body>
+</html>

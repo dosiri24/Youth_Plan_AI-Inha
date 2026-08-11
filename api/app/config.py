@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     interview_wrapup_turn: int = 12
     axis_min_evidence: int = 2
     dev_mode: bool = False
+    access_code: str = ""
+    web_origin: str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[2] / ".env",

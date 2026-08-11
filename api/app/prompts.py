@@ -26,8 +26,10 @@ def load_scoring_instruction() -> str:
 
 
 @lru_cache
-def load_report_prompt(name: Literal["structuring.md"]) -> str:
-    """Load one Phase 3 report prompt without embedding instructions in code."""
+def load_report_prompt(
+    name: Literal["structuring.md", "deidentify.md", "aggregate.md", "insight.md"],
+) -> str:
+    """Load one report-pipeline prompt without embedding instructions in code."""
     return (_PROMPT_DIR / name).read_text(encoding="utf-8")
 
 
@@ -38,9 +40,7 @@ def build_fixed_prefix(age_2040: int) -> str:
     # Age is the only per-participant value, so it trails the shared assets to widen cache reuse.
     participant_info = f"[참여자 정보]\n2040년 추정 나이: 약 {age_2040}세"
     # Background leads, then the rubric; conduct and response format stay closest to generation.
-    return "\n\n".join(
-        (knowledge.load_plan_summary(), rubric, system_prompt, participant_info)
-    )
+    return "\n\n".join((knowledge.load_plan_summary(), rubric, system_prompt, participant_info))
 
 
 def _coverage_target(

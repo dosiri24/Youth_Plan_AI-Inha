@@ -1,0 +1,15 @@
+# The api image needs the repository root as its build context because the plan
+# summary lives outside api/, so it cannot be built by `gcloud run deploy --source`.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=api/Dockerfile
+      - --tag=${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  _IMAGE: asia-northeast3-docker.pkg.dev/youthplan-ai-504608/youthplan/api:latest
+options:
+  logging: CLOUD_LOGGING_ONLY

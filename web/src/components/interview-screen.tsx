@@ -9,24 +9,33 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type MouseEvent,
   type UIEvent,
 } from "react";
-import { ArrowUp, ChevronDown, Code2 } from "lucide-react";
+import { ArrowUp, ChevronDown, Code2, Pencil, Square } from "lucide-react";
 
-import { DevFixtureDialog } from "@/components/dev-fixture-dialog";
+import {
+  DevFixtureDialog,
+  type DevStage,
+} from "@/components/dev-fixture-dialog";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  AccessDenied,
+  readAccessCode,
+  saveAccessCode,
+} from "@/lib/access-code";
 import {
   deleteSession,
   listDevFixtures,
   loadDevFixture,
   sendMessage,
   startInterview,
+  undoTurn,
   type DevFixture,
 } from "@/lib/api";
 import { revealStream } from "@/lib/typewriter";
-
-const DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
+import { useBackGuard } from "@/lib/use-back-guard";
 
 /** Momentum scrolling rarely lands on an exact bottom, so "at the bottom" needs slack. */
 const BOTTOM_SLACK = 48;
@@ -44,18 +53,28 @@ type Message = {
   text: string;
 };
 
-type StreamRequest = { type: "start" } | { type: "message"; text: string };
+type StreamRequest =
+  { type: "start" } | { type: "message"; text: string; userId: number };
 type InterviewStatus = "active" | "ended" | "aborted";
+
+/** The one turn a participant may take back, held so both bubbles can disappear together. */
+type Turn = {
+  userId: number;
+  assistantId: number;
+  text: string;
+};
 
 /** Memoized so a typewriter update only re-renders the bubble whose text changes. */
 const MessageRow = memo(function MessageRow({
   role,
   text,
   showThinking,
+  onEdit,
 }: {
   role: Message["role"];
   text: string;
   showThinking: boolean;
+  onEdit?: () => void;
 }) {
   return (
     <article
@@ -87,6 +106,15 @@ const MessageRow = memo(function MessageRow({
           </span>
         )}
       </div>
+      {onEdit && (
+        <Button
+          className="mt-2 h-8 rounded-xl bg-secondary px-3 text-[12px] font-bold text-primary hover:bg-secondary/70 hover:text-primary"
+          onClick={onEdit}
+          variant="ghost"
+        >
+          <Pencil aria-hidden="true" className="size-3.5" />이 답변 고치기
+        </Button>
+      )}
     </article>
   );
 });
@@ -103,23 +131,35 @@ export function InterviewScreen({
   const [streaming, setStreaming] = useState(true);
   const [thinking, setThinking] = useState(true);
   const [status, setStatus] = useState<InterviewStatus>("active");
+  const [progress, setProgress] = useState(0);
+  const [turn, setTurn] = useState<Turn | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const [focusTick, setFocusTick] = useState(0);
   const [quitOpen, setQuitOpen] = useState(false);
   const [quitting, setQuitting] = useState(false);
-  const [devOpen, setDevOpen] = useState(false);
+  const [devStage, setDevStage] = useState<DevStage>("closed");
   const [devFixtures, setDevFixtures] = useState<DevFixture[] | null>(null);
   const [loadingFixture, setLoadingFixture] = useState<string | null>(null);
+  const [codePending, setCodePending] = useState(false);
+  const [codeMessage, setCodeMessage] = useState<string | null>(null);
   const [following, setFollowing] = useState(true);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const sequenceRef = useRef(0);
   const startedRef = useRef(false);
   const streamRef = useRef<AbortController | null>(null);
   const quittingRef = useRef(false);
+  const revertingRef = useRef(false);
 
   const play = useCallback(
     async (request: StreamRequest) => {
       const assistantId = ++sequenceRef.current;
       const controller = new AbortController();
       streamRef.current = controller;
+      revertingRef.current = false;
+      if (request.type === "message") {
+        setTurn({ assistantId, text: request.text, userId: request.userId });
+      }
       setMessages((current) => [
         ...current,
         { id: assistantId, role: "assistant", text: "" },
@@ -133,7 +173,7 @@ export function InterviewScreen({
           : sendMessage(sessionId, request.text, controller.signal);
 
       try {
-        const nextState = await revealStream(events, {
+        const end = await revealStream(events, {
           signal: controller.signal,
           onFirstDelta: () => setThinking(false),
           onText: (text) => {
@@ -149,9 +189,12 @@ export function InterviewScreen({
         if (quittingRef.current) return;
 
         setStreaming(false);
-        if (nextState !== "continue") setStatus(nextState);
+        setProgress(end.progress);
+        if (end.state !== "continue") setStatus(end.state);
       } catch {
-        if (!quittingRef.current) onError();
+        // Quitting and reverting both abort on purpose, so neither is a failure.
+        if (revertingRef.current) revertingRef.current = false;
+        else if (!quittingRef.current) onError();
       } finally {
         if (streamRef.current === controller) streamRef.current = null;
       }
@@ -179,9 +222,67 @@ export function InterviewScreen({
     setFollowing(scrollHeight - scrollTop - clientHeight <= BOTTOM_SLACK);
   };
 
+  // Focus can only land once the revert re-enables the composer in the same commit.
+  useEffect(() => {
+    if (focusTick === 0) return;
+
+    inputRef.current?.focus();
+  }, [focusTick]);
+
+  /** Taking a turn back means the participant gets their own words back, ready to edit. */
+  const revert = useCallback((reverted: Turn) => {
+    setMessages((current) =>
+      current.filter(
+        (message) =>
+          message.id !== reverted.userId && message.id !== reverted.assistantId,
+      ),
+    );
+    setInput(reverted.text);
+    setTurn(null);
+    setStreaming(false);
+    setThinking(false);
+    setFollowing(true);
+    setFocusTick((tick) => tick + 1);
+  }, []);
+
+  // React reuses this node for the send button, so the click would land on a
+  // submit type by the time the browser runs its default action and resend the turn.
+  const stopStream = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      if (!turn || !streaming) return;
+
+      // The backend stores a turn only after its stream closes, so a cut turn never existed.
+      revertingRef.current = true;
+      streamRef.current?.abort();
+      revert(turn);
+    },
+    [revert, streaming, turn],
+  );
+
+  const editLastTurn = useCallback(async () => {
+    if (!turn || streaming || undoing) return;
+
+    setUndoing(true);
+    try {
+      await undoTurn(sessionId);
+      revert(turn);
+    } catch {
+      onError();
+    } finally {
+      setUndoing(false);
+    }
+  }, [onError, revert, sessionId, streaming, turn, undoing]);
+
   const closeQuit = useCallback(() => {
     if (!quittingRef.current) setQuitOpen(false);
   }, []);
+
+  // A finished interview has nowhere to go back to, so leaving is the only exit left.
+  useBackGuard(() => {
+    if (quitOpen) closeQuit();
+    else if (status === "active") setQuitOpen(true);
+  });
 
   const confirmQuit = useCallback(async () => {
     if (quittingRef.current) return;
@@ -198,16 +299,50 @@ export function InterviewScreen({
     }
   }, [onError, onReturn, sessionId]);
 
+  // The fixture list is the code check: a 403 here means the code was wrong.
+  const requestFixtures = useCallback(async () => {
+    setCodePending(true);
+    try {
+      setDevFixtures(await listDevFixtures());
+      setCodeMessage(null);
+      setDevStage("fixtures");
+    } catch (error) {
+      if (!(error instanceof AccessDenied)) {
+        onError();
+        return;
+      }
+      setCodeMessage("코드가 맞지 않아요. 다시 입력해 주세요.");
+      setDevStage("code");
+    } finally {
+      setCodePending(false);
+    }
+  }, [onError]);
+
   const openDevMode = useCallback(() => {
     if (streaming || quitting) return;
 
-    setDevOpen(true);
-    if (devFixtures !== null) return;
+    if (devFixtures !== null) {
+      setDevStage("fixtures");
+      return;
+    }
 
-    void listDevFixtures()
-      .then(setDevFixtures)
-      .catch(() => onError());
-  }, [devFixtures, onError, quitting, streaming]);
+    if (readAccessCode() === null) {
+      setDevStage("code");
+      return;
+    }
+
+    setDevStage("fixtures");
+    void requestFixtures();
+  }, [devFixtures, quitting, requestFixtures, streaming]);
+
+  const submitCode = useCallback(
+    (code: string) => {
+      saveAccessCode(code);
+      setCodeMessage(null);
+      void requestFixtures();
+    },
+    [requestFixtures],
+  );
 
   const loadFixture = useCallback(
     async (name: string) => {
@@ -226,8 +361,9 @@ export function InterviewScreen({
         sequenceRef.current = transcript.length;
         // The backend ends the session on load, and these messages were never streamed.
         setStatus("ended");
+        setTurn(null);
         setFollowing(true);
-        setDevOpen(false);
+        setDevStage("closed");
       } catch {
         onError();
       } finally {
@@ -245,6 +381,7 @@ export function InterviewScreen({
       streaming ||
       status !== "active" ||
       quitting ||
+      undoing ||
       loadingFixture !== null
     )
       return;
@@ -253,7 +390,7 @@ export function InterviewScreen({
     setMessages((current) => [...current, { id: userId, role: "user", text }]);
     setInput("");
     setFollowing(true);
-    void play({ type: "message", text });
+    void play({ type: "message", text, userId });
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -267,24 +404,29 @@ export function InterviewScreen({
     }
   };
 
+  // A finished interview is fully explored, so its bar must not stop short of the end.
+  const shownProgress = status === "ended" ? 100 : progress;
+  const editable =
+    status === "active" && !streaming && !quitting && loadingFixture === null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
-      <header className="flex shrink-0 items-center justify-between bg-card px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-4">
-        <div>
-          <p className="text-[13px] font-semibold text-primary">유스플랜AI</p>
-          <div className="mt-1 flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className={`size-2 rounded-full ${status === "aborted" ? "bg-incheon-gray" : "bg-incheon-green"}`}
-            />
-            <p className="text-[15px] font-bold">
-              {status === "active" ? "하늘과 인터뷰 중" : "인터뷰 종료"}
-            </p>
+      <header className="shrink-0 bg-card px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[13px] font-semibold text-primary">유스플랜AI</p>
+            <div className="mt-1 flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className={`size-2 rounded-full ${status === "aborted" ? "bg-incheon-gray" : "bg-incheon-green"}`}
+              />
+              <p className="text-[15px] font-bold">
+                {status === "active" ? "하늘과 인터뷰 중" : "인터뷰 종료"}
+              </p>
+            </div>
           </div>
-        </div>
-        {status === "active" && (
-          <div className="flex items-center gap-1">
-            {DEV_MODE && (
+          {status === "active" && (
+            <div className="flex items-center gap-1">
               <Button
                 aria-label="개발자 모드 열기"
                 className="size-8 rounded-xl text-muted-foreground/70"
@@ -295,15 +437,36 @@ export function InterviewScreen({
               >
                 <Code2 aria-hidden="true" className="size-4" />
               </Button>
-            )}
-            <Button
-              className="h-9 rounded-xl px-3 text-[13px] font-semibold text-muted-foreground"
-              disabled={quitting}
-              onClick={() => setQuitOpen(true)}
-              variant="ghost"
+              <Button
+                className="h-9 rounded-xl px-3 text-[13px] font-semibold text-muted-foreground"
+                disabled={quitting}
+                onClick={() => setQuitOpen(true)}
+                variant="ghost"
+              >
+                인터뷰 그만두기
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {status !== "aborted" && (
+          <div className="mt-3.5 flex items-center gap-3">
+            <div
+              aria-label="인터뷰 진행률"
+              aria-valuemax={100}
+              aria-valuemin={0}
+              aria-valuenow={shownProgress}
+              className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
+              role="progressbar"
             >
-              인터뷰 그만두기
-            </Button>
+              <div
+                className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out"
+                style={{ width: `${shownProgress}%` }}
+              />
+            </div>
+            <span className="text-[12px] font-bold text-primary tabular-nums">
+              {shownProgress}%
+            </span>
           </div>
         )}
       </header>
@@ -322,6 +485,11 @@ export function InterviewScreen({
             {messages.map((message) => (
               <MessageRow
                 key={message.id}
+                onEdit={
+                  editable && message.id === turn?.userId
+                    ? () => void editLastTurn()
+                    : undefined
+                }
                 role={message.role}
                 text={message.text}
                 showThinking={
@@ -391,11 +559,13 @@ export function InterviewScreen({
             </label>
             <textarea
               id="interview-message"
+              ref={inputRef}
               className="max-h-28 min-h-10 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-base leading-6 outline-none [field-sizing:content] placeholder:text-muted-foreground/70 disabled:cursor-not-allowed"
               disabled={
                 status !== "active" ||
                 streaming ||
                 quitting ||
+                undoing ||
                 loadingFixture !== null
               }
               enterKeyHint="send"
@@ -411,25 +581,42 @@ export function InterviewScreen({
               rows={1}
               value={input}
             />
-            <Button
-              aria-label="답변 보내기"
-              className="size-11 rounded-2xl"
-              disabled={
-                !input.trim() ||
-                status !== "active" ||
-                streaming ||
-                quitting ||
-                loadingFixture !== null
-              }
-              size="icon"
-              type="submit"
-            >
-              <ArrowUp
-                aria-hidden="true"
-                className="size-5"
-                strokeWidth={2.5}
-              />
-            </Button>
+            {streaming && turn ? (
+              <Button
+                aria-label="답변 생성 중단하기"
+                className="size-11 rounded-2xl bg-incheon-gray text-white hover:bg-incheon-gray/90"
+                onClick={stopStream}
+                size="icon"
+                type="button"
+              >
+                <Square
+                  aria-hidden="true"
+                  className="size-4 fill-current"
+                  strokeWidth={2.5}
+                />
+              </Button>
+            ) : (
+              <Button
+                aria-label="답변 보내기"
+                className="size-11 rounded-2xl"
+                disabled={
+                  !input.trim() ||
+                  status !== "active" ||
+                  streaming ||
+                  quitting ||
+                  undoing ||
+                  loadingFixture !== null
+                }
+                size="icon"
+                type="submit"
+              >
+                <ArrowUp
+                  aria-hidden="true"
+                  className="size-5"
+                  strokeWidth={2.5}
+                />
+              </Button>
+            )}
           </div>
         </form>
       )}
@@ -440,16 +627,20 @@ export function InterviewScreen({
         open={quitOpen}
         pending={quitting}
       />
-      {DEV_MODE && (
-        <DevFixtureDialog
-          fixtures={devFixtures ?? []}
-          listing={devFixtures === null}
-          loadingName={loadingFixture}
-          onClose={() => setDevOpen(false)}
-          onSelect={(name) => void loadFixture(name)}
-          open={devOpen}
-        />
-      )}
+      <DevFixtureDialog
+        codeMessage={codeMessage}
+        codePending={codePending}
+        fixtures={devFixtures ?? []}
+        listing={devFixtures === null}
+        loadingName={loadingFixture}
+        onClose={() => {
+          setDevStage("closed");
+          setCodeMessage(null);
+        }}
+        onSelect={(name) => void loadFixture(name)}
+        onSubmitCode={submitCode}
+        stage={devStage}
+      />
     </div>
   );
 }

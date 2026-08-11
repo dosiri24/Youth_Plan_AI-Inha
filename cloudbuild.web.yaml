@@ -1,0 +1,17 @@
+# The api URL is a Next.js build-time constant, so web needs a build arg that
+# `gcloud run deploy --source` cannot pass.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    dir: web
+    args:
+      - build
+      - --build-arg=NEXT_PUBLIC_API_BASE_URL=${_API_BASE_URL}
+      - --tag=${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  _IMAGE: asia-northeast3-docker.pkg.dev/youthplan-ai-504608/youthplan/web:latest
+  _API_BASE_URL: https://api-435235910956.asia-northeast3.run.app
+options:
+  logging: CLOUD_LOGGING_ONLY

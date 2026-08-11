@@ -1,13 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
-import { ArrowLeft, Check, LoaderCircle, LockKeyhole } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { Check, LoaderCircle, LockKeyhole } from "lucide-react";
 
 import { AxisReasons } from "@/components/axis-reasons";
 import { CityTypeCard } from "@/components/city-type-card";
 import { ReportOverview } from "@/components/report-overview";
 import { ResultLoading } from "@/components/result-loading";
-import { RevisionForm } from "@/components/revision-form";
+import { RevisionForm, REVISION_FORM_ID } from "@/components/revision-form";
 import { ShareActions, type CardAction } from "@/components/share-actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,10 +27,12 @@ import {
 } from "@/lib/api";
 import { getCityType } from "@/lib/city-types";
 import { downloadTypeCard, shareTypeCard } from "@/lib/share-card";
+import { useBackGuard } from "@/lib/use-back-guard";
 
 type ResultScreenProps = {
   sessionId: string;
   onError: () => void;
+  onReturn: () => void;
 };
 
 type ResultStep = "type" | "report" | "revise";
@@ -32,39 +40,44 @@ type ResultStep = "type" | "report" | "revise";
 type ResultHeaderProps = {
   description: string;
   title: string;
-  backDisabled?: boolean;
-  onBack?: () => void;
 };
 
 /** A consistent header makes each result step feel like one focused screen. */
-function ResultHeader({
-  backDisabled = false,
-  description,
-  onBack,
-  title,
-}: ResultHeaderProps) {
+function ResultHeader({ description, title }: ResultHeaderProps) {
   return (
     <header className="bg-card px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-5">
-      {onBack && (
-        <Button
-          className="-ml-2 h-9 rounded-xl px-2 text-[13px] font-semibold text-muted-foreground"
-          disabled={backDisabled}
-          onClick={onBack}
-          variant="ghost"
-        >
-          <ArrowLeft aria-hidden="true" className="size-4" />
-          이전
-        </Button>
-      )}
-      <h1
-        className={`${onBack ? "mt-3" : ""} text-[27px] font-bold tracking-[-0.03em]`}
-      >
-        {title}
-      </h1>
+      <h1 className="text-[27px] font-bold tracking-[-0.03em]">{title}</h1>
       <p className="mt-2 text-[15px] leading-6 text-muted-foreground">
         {description}
       </p>
     </header>
+  );
+}
+
+/** Going forward and going back belong at the thumb, not at the top corner (PLAN 2.4). */
+function ActionBar({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex shrink-0 gap-2.5 bg-card px-5 pt-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] shadow-[0_-6px_20px_rgba(23,25,26,0.06)]">
+      {children}
+    </div>
+  );
+}
+
+/** One scroll region above one action bar keeps the bar visible at any scroll offset. */
+function ResultStepLayout({
+  actions,
+  children,
+}: {
+  actions: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {children}
+      </div>
+      <ActionBar>{actions}</ActionBar>
+    </div>
   );
 }
 
@@ -134,12 +147,17 @@ function Submitted({
 }
 
 /** The controller retains one fetched result while its three views change. */
-export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
+export function ResultScreen({
+  sessionId,
+  onError,
+  onReturn,
+}: ResultScreenProps) {
   const [result, setResult] = useState<ResultResponse | null>(null);
   const [report, setReport] = useState<PersonalReport | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [step, setStep] = useState<ResultStep>("type");
   const [revising, setRevising] = useState(false);
+  const [reviseReady, setReviseReady] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [cardAction, setCardAction] = useState<CardAction>(null);
@@ -157,6 +175,13 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
       })
       .catch(() => onError());
   }, [onError, sessionId]);
+
+  // The first step has no earlier step, and a submitted session no longer exists.
+  useBackGuard(() => {
+    if (submissionId) onReturn();
+    else if (step === "revise" && !revising) setStep("report");
+    else if (step === "report" && !submitting) setStep("type");
+  });
 
   const revise = async (selections: RevisionSelection[], comment: string) => {
     if (revising) return;
@@ -238,15 +263,23 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
 
   if (step === "type") {
     return (
-      <div
+      <ResultStepLayout
         key={step}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background"
+        actions={
+          <Button
+            className="h-14 flex-1 rounded-2xl text-[16px] font-bold"
+            disabled={cardAction !== null}
+            onClick={() => setStep("report")}
+          >
+            내 이야기와 요구 확인하기
+          </Button>
+        }
       >
         <ResultHeader
           description="대화를 바탕으로 판정한 결과예요."
           title="내 유형 확인"
         />
-        <div className="space-y-10 px-5 pt-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
+        <div className="space-y-10 px-5 pt-6 pb-8">
           <div className="space-y-4">
             <CityTypeCard
               ref={cardRef}
@@ -260,38 +293,27 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
             />
           </div>
           <AxisReasons reasons={report.axis_reasons} />
-          <Button
-            className="h-14 w-full rounded-2xl text-[16px] font-bold"
-            disabled={cardAction !== null}
-            onClick={() => setStep("report")}
-          >
-            내 이야기와 요구 확인하기
-          </Button>
         </div>
-      </div>
+      </ResultStepLayout>
     );
   }
 
   if (step === "report") {
     return (
-      <div
+      <ResultStepLayout
         key={step}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background"
-      >
-        <ResultHeader
-          description="내 이야기가 잘 정리됐는지 확인해 주세요."
-          onBack={() => setStep("type")}
-          title="내 이야기와 요구 확인"
-        />
-        <div className="space-y-12 px-5 pt-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
-          <ReportOverview report={report} />
-
-          <section>
-            <p className="text-[14px] leading-6 text-muted-foreground">
-              제출하면 이 보고서는 확정되고 더 이상 수정할 수 없어요.
-            </p>
+        actions={
+          <>
             <Button
-              className="mt-4 h-15 w-full rounded-2xl text-[17px] font-bold"
+              className="h-14 flex-1 rounded-2xl text-[15px] font-bold"
+              disabled={submitting}
+              onClick={() => setStep("type")}
+              variant="secondary"
+            >
+              이전
+            </Button>
+            <Button
+              className="h-14 flex-[2] rounded-2xl text-[16px] font-bold"
               disabled={submitting}
               onClick={() => void submit()}
             >
@@ -303,42 +325,83 @@ export function ResultScreen({ sessionId, onError }: ResultScreenProps) {
               )}
               {submitting ? "제출하고 있어요" : "제출하기"}
             </Button>
-          </section>
+          </>
+        }
+      >
+        <ResultHeader
+          description="내 이야기가 잘 정리됐는지 확인해 주세요."
+          title="내 이야기와 요구 확인"
+        />
+        <div className="space-y-12 px-5 pt-6 pb-8">
+          <ReportOverview report={report} />
 
-          <section className="rounded-[24px] bg-card p-5 text-center">
-            <h2 className="text-[18px] font-bold">
-              수정하거나 의견을 더하고 싶나요?
-            </h2>
-            <p className="mt-2 text-[14px] leading-6 text-muted-foreground">
-              다르게 느껴지는 요구 문장을 골라 생각을 덧붙일 수 있어요.
+          <div className="space-y-4">
+            <section className="rounded-[24px] bg-card p-5 text-center">
+              <h2 className="text-[18px] font-bold">
+                수정하거나 의견을 더하고 싶나요?
+              </h2>
+              <p className="mt-2 text-[14px] leading-6 text-muted-foreground">
+                다르게 느껴지는 요구 문장을 골라 생각을 덧붙일 수 있어요.
+              </p>
+              <Button
+                className="mt-4 h-13 w-full rounded-2xl text-[15px] font-bold"
+                onClick={() => setStep("revise")}
+                variant="secondary"
+              >
+                요구 수정하기
+              </Button>
+            </section>
+            <p className="text-center text-[13px] leading-5 text-muted-foreground">
+              제출하면 이 보고서는 확정되고 더 이상 수정할 수 없어요.
             </p>
-            <Button
-              className="mt-4 h-13 w-full rounded-2xl text-[15px] font-bold"
-              onClick={() => setStep("revise")}
-              variant="secondary"
-            >
-              요구 수정하기
-            </Button>
-          </section>
+          </div>
         </div>
-      </div>
+      </ResultStepLayout>
     );
   }
 
   return (
-    <div
+    <ResultStepLayout
       key={step}
-      className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background"
+      actions={
+        <>
+          <Button
+            className="h-14 flex-1 rounded-2xl text-[15px] font-bold"
+            disabled={revising}
+            onClick={() => setStep("report")}
+            variant="secondary"
+          >
+            이전
+          </Button>
+          <Button
+            className="h-14 flex-[2] rounded-2xl text-[15px] font-bold"
+            disabled={!reviseReady}
+            form={REVISION_FORM_ID}
+            type="submit"
+          >
+            {revising && (
+              <LoaderCircle
+                aria-hidden="true"
+                className="size-5 animate-spin"
+              />
+            )}
+            {revising ? "다시 정리하고 있어요" : "의견 반영하고 돌아가기"}
+          </Button>
+        </>
+      }
     >
       <ResultHeader
-        backDisabled={revising}
         description="고른 문장과 의견으로 네 축의 요구를 다시 정리해요."
-        onBack={() => setStep("report")}
         title="요구 수정"
       />
-      <div className="px-5 pt-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
-        <RevisionForm onRevise={revise} report={report} revising={revising} />
+      <div className="px-5 pt-6 pb-8">
+        <RevisionForm
+          onReadyChange={setReviseReady}
+          onRevise={revise}
+          report={report}
+          revising={revising}
+        />
       </div>
-    </div>
+    </ResultStepLayout>
   );
 }

@@ -1,19 +1,23 @@
+import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Response, status
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.middleware.base import RequestResponseEndpoint
 
-from app import interview, report, scoring, session, store
+from app import analysis, interview, report, scoring, session, store
 from app.config import get_settings
 from app.logging import configure_logging, log_event
 
 configure_logging()
+
+PROTECTED_PATH_PREFIXES = ("/api/dev/", "/api/admin/")
 
 
 class CreateSessionRequest(BaseModel):
@@ -59,6 +63,12 @@ class SubmissionResponse(BaseModel):
     submission_id: str
 
 
+class DeleteSubmissionRequest(BaseModel):
+    """Carry the access code that confirms permanent submission deletion."""
+
+    access_code: str
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Log application startup."""
@@ -67,9 +77,28 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.middleware("http")
+async def enforce_access_code(
+    request: Request,
+    call_next: RequestResponseEndpoint,
+) -> Response:
+    """Require the configured code on developer and admin route groups."""
+    access_code = get_settings().access_code
+    if access_code and request.url.path.startswith(PROTECTED_PATH_PREFIXES):
+        submitted_code = request.headers.get("X-Access-Code", "")
+        if not secrets.compare_digest(
+            submitted_code.encode(),
+            access_code.encode(),
+        ):
+            return Response(status_code=status.HTTP_403_FORBIDDEN)
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[get_settings().web_origin],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -123,6 +152,20 @@ def abandon_interview(session_id: str) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@app.delete(
+    "/api/sessions/{session_id}/turns/last",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def undo_last_turn(session_id: str) -> Response:
+    """Remove the latest completed participant turn from an active session."""
+    current = _find_session(session_id)
+    turn = session.undo_last_turn(current)
+    if turn is None:
+        raise HTTPException(status.HTTP_409_CONFLICT)
+    log_event("turn_undone", session_id=session_id, turn=turn)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.post("/api/sessions/{session_id}/result")
 async def generate_result(session_id: str) -> dict[str, object]:
     """Keep deterministic scoring independent from report-track latency."""
@@ -171,7 +214,10 @@ async def revise_result(
 
 
 @app.post("/api/sessions/{session_id}/submit", response_model=SubmissionResponse)
-def submit_result(session_id: str) -> SubmissionResponse:
+def submit_result(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+) -> SubmissionResponse:
     """Leave a single persistence insertion point before memory is discarded."""
     current = _find_session(session_id)
     if (
@@ -183,7 +229,12 @@ def submit_result(session_id: str) -> SubmissionResponse:
 
     submission_id = str(uuid4())
     # Persist the full document before discarding so a save failure leaves the session retryable.
-    store.get_store().save(submission_id, _submission_document(current))
+    document = _submission_document(current)
+    store.get_store().save(submission_id, document)
+    background_tasks.add_task(
+        analysis.deidentify,
+        {**document, "submission_id": submission_id},
+    )
     session.discard_session(session_id)
     log_event("submitted", session_id=session_id, submission_id=submission_id)
     return SubmissionResponse(submission_id=submission_id)
@@ -206,16 +257,44 @@ def get_submission(submission_id: str) -> dict[str, object]:
     return document
 
 
+@app.delete(
+    "/api/admin/submissions/{submission_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_submission(
+    submission_id: str,
+    request: DeleteSubmissionRequest | None = None,
+) -> Response:
+    """Permanently delete one submission after separate body-code confirmation."""
+    access_code = get_settings().access_code
+    submitted_code = request.access_code if request is not None else ""
+    if access_code and not secrets.compare_digest(
+        submitted_code.encode(),
+        access_code.encode(),
+    ):
+        raise HTTPException(status.HTTP_403_FORBIDDEN)
+    if not store.get_store().delete(submission_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.post("/api/admin/analysis/run")
-def run_analysis() -> None:
-    """Signal that the Phase 5 analysis pipeline is not yet implemented."""
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED)
+async def run_analysis() -> dict[str, str]:
+    """Execute one synchronous admin analysis batch."""
+    try:
+        run_id = await analysis.execute()
+    except analysis.NoSubmissionsError:
+        raise HTTPException(status.HTTP_409_CONFLICT) from None
+    return {"run_id": run_id}
 
 
 @app.get("/api/admin/analysis/latest")
-def latest_analysis() -> None:
-    """Report an empty analysis state until a run exists."""
-    raise HTTPException(status.HTTP_404_NOT_FOUND)
+def latest_analysis() -> store.Document:
+    """Return the most recently persisted comprehensive report."""
+    document = store.get_analysis_store().latest()
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    return document
 
 
 def _submission_document(current: session.Session) -> store.Document:

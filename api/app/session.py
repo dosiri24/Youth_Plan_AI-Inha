@@ -96,6 +96,24 @@ def save_turn(current: Session, turn: int, user_text: str, assistant_text: str) 
     )
 
 
+def undo_last_turn(current: Session) -> int | None:
+    """Remove the latest participant turn and its evidence from an active session."""
+    last_turn = max(
+        (message["turn"] for message in current["messages"] if message["role"] == "user"),
+        default=0,
+    )
+    if current["status"] != "active" or last_turn == 0:
+        return None
+
+    current["messages"] = [
+        message for message in current["messages"] if message["turn"] != last_turn
+    ]
+    current["evidence_log"] = [
+        item for item in current["evidence_log"] if item["turn"] != last_turn
+    ]
+    return last_turn
+
+
 def serialize_transcript(messages: Sequence[Message]) -> list[TranscriptMessage]:
     """Remove storage-only timestamps from every model-facing transcript."""
     return [

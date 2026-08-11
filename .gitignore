@@ -47,3 +47,11 @@ data/plan2040_summary.md
 도시TI_4축_해설.md
 
 paper.md
+memo.txt
+docs/interview-lab/
+.gitignore
+LSMD_ADM_SECT_UMD_인천/
+
+# One-off review screenshots. The dashboard contract is dashboard-mock.html,
+# not these evaluation captures.
+docs/dashboard-review/

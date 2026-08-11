@@ -1,396 +1,610 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { HelpCircle, X } from "lucide-react";
-import { Dialog } from "@base-ui/react/dialog";
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 
-import adminGuide from "@/data/admin_guide.json";
-import { AXIS_INFO } from "@/lib/city-axes";
-import { CITY_TYPES } from "@/lib/city-types";
-import { formatDateTime } from "@/lib/format";
-import { Button } from "@/components/ui/button";
+import { getPoleBadge } from "@/lib/city-axes";
+import { getCityType } from "@/lib/city-types";
 import {
   getLatestAnalysis,
   runAnalysis,
+  type AiNoteCard,
   type AnalysisRun,
-  type AxisName,
-  type AxisStat,
-  type AxisSummary,
 } from "@/lib/api";
 
-type AdminGuide = {
-  axes: {
-    axis: AxisName;
-    display: string;
-    title: string;
-    measures: string;
-    lineage: string;
-    poles: { letter: string; name: string; description: string }[];
-  }[];
-  excluded_axis: { display: string; title: string; reason: string };
-};
+import styles from "./dashboard.module.css";
+import {
+  AGE_BANDS,
+  AXIS_QUESTION,
+  SECTIONS,
+  axisTitle,
+  buildDemandCsv,
+  formatDayRange,
+  formatStamp,
+  spellCode,
+} from "./dashboard-data";
+import { DetailPanel, type Selection } from "./detail-panel";
+import { IncheonMapCard } from "./incheon-map";
+import { useTip } from "./tip";
 
-const GUIDE = adminGuide as AdminGuide;
+const STAGE_WIDTH = 1920;
+const STAGE_HEIGHT = 1080;
 
-type LoadState =
-  | { status: "loading" }
-  | { status: "error" }
-  | { status: "empty" }
-  | { status: "ready"; run: AnalysisRun };
+type LoadStatus = "loading" | "ready" | "empty" | "error";
 
-type RunState = "idle" | "running" | "not_ready";
-
-function SectionTitle({ index, title }: { index: number; title: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="flex size-7 items-center justify-center rounded-full bg-secondary text-[13px] font-bold text-primary">
-        {index}
-      </span>
-      <h2 className="text-[20px] font-bold tracking-[-0.02em]">{title}</h2>
-    </div>
-  );
+function NoData({ text }: { text: string }) {
+  return <div className={styles.nodata}>{text}</div>;
 }
 
-function EmptyBlock() {
-  return (
-    <p className="rounded-2xl bg-card px-5 py-8 text-center text-[14px] text-muted-foreground">
-      아직 분석 결과가 없습니다. 분석을 실행하면 이곳에 표시됩니다.
-    </p>
-  );
-}
+export default function Dashboard() {
+  const [status, setStatus] = useState<LoadStatus>("loading");
+  const [run, setRun] = useState<AnalysisRun | null>(null);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [aiMode, setAiMode] = useState(false);
+  const [sortKey, setSortKey] = useState<1 | 2>(1);
+  const [updating, setUpdating] = useState(false);
+  const [noSubmissions, setNoSubmissions] = useState(false);
+  const [scale, setScale] = useState<number | null>(null);
 
-function AxisStatCard({ stat }: { stat: AxisStat }) {
-  return (
-    <article className="rounded-2xl bg-card p-5">
-      <p className="text-[15px] font-bold">{AXIS_INFO[stat.axis].title}</p>
-      <dl className="mt-4 flex gap-2">
-        {stat.poles.map((pole) => (
-          <div
-            key={pole.letter}
-            className="flex-1 rounded-xl bg-muted px-3 py-3"
-          >
-            <dt className="text-[12px] font-bold text-primary">
-              {pole.letter}
-            </dt>
-            <dd className="mt-1 text-[20px] font-bold">
-              {pole.count}
-              <span className="ml-1 text-[12px] font-semibold text-muted-foreground">
-                명
-              </span>
-            </dd>
-            <p className="mt-1 text-[12px] text-muted-foreground">
-              평균 강도 {pole.mean_strength}
-            </p>
-          </div>
-        ))}
-      </dl>
-    </article>
-  );
-}
+  const knobRef = useRef<HTMLElement>(null);
+  const sortRefs = useRef<(HTMLElement | null)[]>([]);
+  const knobPlaced = useRef(false);
 
-function AxisSummaryCard({ summary }: { summary: AxisSummary }) {
-  return (
-    <article className="rounded-2xl bg-card p-5">
-      <p className="text-[15px] font-bold">{AXIS_INFO[summary.axis].title}</p>
-      <div className="mt-4 space-y-4">
-        {summary.poles.map((pole) => (
-          <div key={pole.letter}>
-            <p className="text-[13px] font-bold text-primary">{pole.letter}</p>
-            <ul className="mt-2 space-y-1.5">
-              {pole.sentences.map((sentence, index) => (
-                <li key={index} className="flex gap-2.5 text-[14px] leading-6">
-                  <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-incheon-green" />
-                  <span>{sentence}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-/** The sixteen-type reference sits behind a help icon so it never crowds the axes. */
-function TypesHelpDialog() {
-  return (
-    <Dialog.Root>
-      <Dialog.Trigger
-        aria-label="16유형 해설 보기"
-        className="inline-flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-      >
-        <HelpCircle aria-hidden="true" className="size-5" />
-      </Dialog.Trigger>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-50 bg-foreground/35" />
-        <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 max-h-[80dvh] w-[min(720px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-3xl bg-popover p-7 shadow-[0_18px_60px_rgba(23,25,26,0.18)]">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <Dialog.Title className="text-[20px] font-bold tracking-[-0.02em]">
-                16유형 해설
-              </Dialog.Title>
-              <Dialog.Description className="mt-1 text-[13px] text-muted-foreground">
-                네 축 판정 글자를 이어 붙인 유형의 별명과 설명입니다.
-              </Dialog.Description>
-            </div>
-            <Dialog.Close
-              aria-label="닫기"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-            >
-              <X aria-hidden="true" className="size-5" />
-            </Dialog.Close>
-          </div>
-          <ul className="mt-5 grid gap-x-6 gap-y-3 sm:grid-cols-2">
-            {CITY_TYPES.map((type) => (
-              <li key={type.code}>
-                <p className="text-[13px] font-bold">
-                  <span className="font-mono tracking-wider text-primary">
-                    {type.code}
-                  </span>{" "}
-                  {type.nickname}
-                </p>
-                <p className="mt-0.5 text-[13px] leading-6 text-muted-foreground">
-                  {type.description}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
-export default function ReportHome() {
-  const [state, setState] = useState<LoadState>({ status: "loading" });
-  const [runState, setRunState] = useState<RunState>("idle");
+  const { tipRef, tip } = useTip();
 
   useEffect(() => {
     void getLatestAnalysis()
-      .then((run) =>
-        setState(run === null ? { status: "empty" } : { status: "ready", run }),
-      )
-      .catch(() => setState({ status: "error" }));
+      .then((latest) => {
+        setRun(latest);
+        setStatus(latest === null ? "empty" : "ready");
+      })
+      .catch(() => setStatus("error"));
   }, []);
 
-  const run = async () => {
-    if (runState === "running") return;
+  /* Fixed 16:9, scaled as one piece to fit the window. */
+  useEffect(() => {
+    const fit = () =>
+      setScale(
+        Math.min(
+          window.innerWidth / STAGE_WIDTH,
+          window.innerHeight / STAGE_HEIGHT,
+        ),
+      );
 
-    setRunState("running");
+    fit();
+    window.addEventListener("resize", fit);
+
+    return () => window.removeEventListener("resize", fit);
+  }, []);
+
+  /* The pill moves to the active option, and its width follows too because the
+     two labels differ in length. */
+  useEffect(() => {
+    const knob = knobRef.current;
+    const target = sortRefs.current[sortKey - 1];
+    if (!knob || !target) return;
+
+    // Sliding on the very first placement would make loading look unsettled.
+    const instant = !knobPlaced.current;
+    knobPlaced.current = true;
+    if (instant) knob.style.transition = "none";
+    knob.style.width = `${target.offsetWidth}px`;
+    knob.style.transform = `translateX(${target.offsetLeft}px)`;
+    if (instant) {
+      requestAnimationFrame(() => {
+        knob.style.transition = "";
+      });
+    }
+  }, [sortKey]);
+
+  const pick = (next: Selection) => ({
+    onClick: () => setSelection(next),
+    onKeyDown: (event: KeyboardEvent) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      setSelection(next);
+    },
+    role: "button",
+    tabIndex: 0,
+  });
+
+  const update = async () => {
+    if (updating) return;
+
+    setUpdating(true);
+    setNoSubmissions(false);
     try {
       const outcome = await runAnalysis();
-      if (outcome === "not_ready") {
-        setRunState("not_ready");
+      if (outcome === "empty") {
+        setNoSubmissions(true);
         return;
       }
-      setRunState("idle");
       const latest = await getLatestAnalysis();
-      setState(
-        latest === null
-          ? { status: "empty" }
-          : { status: "ready", run: latest },
-      );
+      setRun(latest);
+      setStatus(latest === null ? "empty" : "ready");
+      setSelection(null);
     } catch {
-      setState({ status: "error" });
-      setRunState("idle");
+      setStatus("error");
+    } finally {
+      setUpdating(false);
     }
   };
 
-  const hasRun = state.status === "ready";
-  const distribution = hasRun
-    ? CITY_TYPES.map((type) => ({
-        code: type.code,
-        count: state.run.type_distribution[type.code] ?? 0,
-      })).filter((entry) => entry.count > 0)
+  const download = () => {
+    const people = run?.people;
+    if (!people?.length) return;
+
+    // Excel reads the file as EUC-KR without a byte order mark.
+    const blob = new Blob(["\ufeff" + buildDemandCsv(people)], {
+      type: "text/csv;charset=utf-8",
+    });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "유스플랜AI_청년의견_원자료.csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const aiChip = (card: AiNoteCard) =>
+    run?.ai_notes?.[card] ? (
+      <button
+        className={styles.aichip}
+        onClick={() => setSelection({ kind: "ai", card })}
+        type="button"
+      >
+        AI 해석
+      </button>
+    ) : null;
+
+  const stamp = updating
+    ? "자료를 다시 계산하는 중입니다"
+    : noSubmissions
+      ? "분석할 제출본이 없습니다"
+      : status === "loading"
+        ? "불러오는 중입니다"
+        : status === "error"
+          ? "자료를 불러오지 못했습니다"
+          : status === "empty" || run === null
+            ? "아직 분석을 실행하지 않았습니다"
+            : `${formatStamp(run.executed_at)} 기준`;
+
+  const kpi = run?.kpi;
+  const ages = run?.ages;
+  const topics = run?.topics;
+  const cross = run?.cross;
+  const people = run?.people;
+
+  const summary: [string, string, string][] = [
+    ["참여자수", kpi ? String(kpi.participants) : "—", kpi ? "명" : ""],
+    ["수집된 세부 요구", kpi ? String(kpi.demands) : "—", kpi ? "건" : ""],
+    ["참여 자치구수", kpi ? `${kpi.regions} / 11` : "—", kpi ? "곳" : ""],
+    ["참여 목적", "2045 인천도시기본계획", ""],
+  ];
+
+  const ageMax = Math.max(1, ...(ages ?? []).map((band) => band.total));
+
+  const topicRows = [...(topics ?? [])].sort((left, right) =>
+    sortKey === 1 ? right.demands - left.demands : right.people - left.people,
+  );
+  const topicMax = Math.max(
+    1,
+    ...topicRows.map((row) => (sortKey === 1 ? row.demands : row.people)),
+  );
+
+  const crossMax = Math.max(
+    1,
+    ...(topics ?? []).flatMap((row) => cross?.[row.topic] ?? []),
+  );
+
+  const typeRows = run
+    ? Object.entries(run.type_distribution).sort(
+        (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+      )
     : [];
+  const typeMax = Math.max(1, ...typeRows.map(([, count]) => count));
+
+  const fit = scale ?? 1;
 
   return (
-    <div className="space-y-12">
-      <header className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[26px] font-bold tracking-[-0.02em]">
-            종합 리포트
-          </h1>
-          {hasRun && (
-            <p className="mt-1.5 text-[13px] text-muted-foreground">
-              {formatDateTime(state.run.executed_at)} 실행 ·{" "}
-              {state.run.input_submission_ids.length}건 분석
-            </p>
-          )}
-        </div>
-        <div className="shrink-0 text-right">
-          <Button
-            className="h-11 rounded-xl px-5 text-[14px] font-bold"
-            disabled={runState === "running"}
-            onClick={() => void run()}
+    <div className={styles.root}>
+      <div
+        className={`${styles.stage} ${aiMode ? styles.aion : ""}`}
+        style={{
+          transform: `translate(${(-STAGE_WIDTH / 2) * fit}px, ${(-STAGE_HEIGHT / 2) * fit}px) scale(${fit})`,
+          visibility: scale === null ? "hidden" : "visible",
+        }}
+      >
+        <div className={styles.top}>
+          <span className={styles.brand}>유스플랜AI</span>
+          <span className={styles.t}>청년 의견 관리 플랫폼</span>
+          <span className={styles.d}>{stamp}</span>
+          <span className={styles.sp} />
+          <label className={styles.ai}>
+            <input
+              checked={aiMode}
+              onChange={(event) => setAiMode(event.target.checked)}
+              type="checkbox"
+            />
+            <span className={styles.sw} />
+            AI 분석모드
+          </label>
+          <Link
+            className={`${styles.btn} ${styles.g}`}
+            href="/admin/submissions"
           >
-            {runState === "running" ? "분석 실행 중" : "분석 실행"}
-          </Button>
-          {runState === "not_ready" && (
-            <p className="mt-2 max-w-[220px] text-[12px] leading-5 text-muted-foreground">
-              분석 파이프라인이 아직 준비되지 않았습니다.
-            </p>
-          )}
+            제출본 목록
+          </Link>
+          <button
+            className={`${styles.btn} ${styles.g}`}
+            disabled={!people?.length}
+            onClick={download}
+            type="button"
+          >
+            원자료 내려받기
+          </button>
+          <button
+            className={styles.btn}
+            disabled={updating}
+            onClick={() => void update()}
+            type="button"
+          >
+            {updating ? "업데이트 중" : "자료 업데이트"}
+          </button>
         </div>
-      </header>
 
-      {state.status === "loading" && (
-        <p className="rounded-2xl bg-card px-5 py-8 text-center text-[14px] text-muted-foreground">
-          불러오는 중입니다.
-        </p>
-      )}
-      {state.status === "error" && (
-        <p className="rounded-2xl bg-card px-5 py-8 text-center text-[14px] text-muted-foreground">
-          리포트를 불러오지 못했습니다.
-        </p>
-      )}
+        <div className={styles.strip}>
+          {summary.map(([label, value, unit]) => (
+            <div className={styles.st} key={label}>
+              <span className={styles.l}>{label}</span>
+              <span className={`${styles.v} ${unit ? "" : styles.txt}`}>
+                {value}
+                {unit && <small>{unit}</small>}
+              </span>
+            </div>
+          ))}
+          <div className={styles.sp} />
+          <div className={styles.aicaution}>
+            AI가 생성한 해석입니다. 외부에 인용하기 전 수치를 직접 확인하시기
+            바랍니다.
+          </div>
+        </div>
 
-      {state.status !== "loading" && state.status !== "error" && (
-        <>
-          <section className="space-y-4">
-            <SectionTitle index={1} title="축별 분포와 극별 평균 강도" />
-            {hasRun ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {state.run.axis_stats.map((stat) => (
-                  <AxisStatCard key={stat.axis} stat={stat} />
-                ))}
-              </div>
-            ) : (
-              <EmptyBlock />
-            )}
-          </section>
+        <div className={styles.grid}>
+          <div className={`${styles.col} ${styles.l}`}>
+            <div className={styles.card}>
+              <h2>
+                자치구별 참여자수
+                {aiChip("map")}
+              </h2>
+              {run?.regions_count ? (
+                <IncheonMapCard
+                  counts={run.regions_count}
+                  onSelect={(region) =>
+                    setSelection({ kind: "region", region })
+                  }
+                  selected={
+                    selection?.kind === "region" ? selection.region : null
+                  }
+                  tip={tip}
+                />
+              ) : (
+                <div className={styles.body}>
+                  <NoData text="자치구 집계가 아직 없습니다." />
+                </div>
+              )}
+            </div>
 
-          <section className="space-y-4">
-            <SectionTitle index={2} title="16유형 분포" />
-            {hasRun ? (
-              <div className="rounded-2xl bg-card p-5">
-                {distribution.length === 0 ? (
-                  <p className="text-center text-[14px] text-muted-foreground">
-                    집계된 유형이 없습니다.
-                  </p>
+            <div className={styles.card}>
+              <h2>
+                연령 구성{" "}
+                <span className={styles.r}>
+                  <span>{kpi ? `${kpi.age_min}~${kpi.age_max}세` : ""}</span>{" "}
+                  <span className={`${styles.lg} ${styles.m}`}>남</span>
+                  <span className={`${styles.lg} ${styles.f}`}>여</span>
+                </span>
+              </h2>
+              <div className={styles.body}>
+                {ages ? (
+                  ages.map((band) => (
+                    <div
+                      className={styles.agerow}
+                      key={band.band}
+                      {...tip(
+                        `${band.band}세 ${band.total}명 — 남 ${band.male}명 · 여 ${band.female}명` +
+                          (band.unknown ? ` · 미상 ${band.unknown}명` : ""),
+                      )}
+                    >
+                      <div className={styles.lb}>{band.band}세</div>
+                      <div className={styles.track}>
+                        <div
+                          className={`${styles.sex} ${styles.m}`}
+                          style={{ width: `${(band.male / ageMax) * 100}%` }}
+                        >
+                          {band.male || ""}
+                        </div>
+                        <div
+                          className={`${styles.sex} ${styles.f}`}
+                          style={{ width: `${(band.female / ageMax) * 100}%` }}
+                        >
+                          {band.female || ""}
+                        </div>
+                      </div>
+                      <div className={styles.n}>{band.total}명</div>
+                    </div>
+                  ))
                 ) : (
-                  <ul className="grid gap-x-8 gap-y-2 md:grid-cols-2">
-                    {distribution.map((entry) => (
-                      <li
-                        key={entry.code}
-                        className="flex items-center justify-between gap-4 text-[14px]"
-                      >
-                        <span className="font-mono font-bold tracking-wider text-primary">
-                          {entry.code}
-                        </span>
-                        <span className="font-semibold">{entry.count}명</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <NoData text="연령 집계가 아직 없습니다." />
                 )}
               </div>
-            ) : (
-              <EmptyBlock />
-            )}
-          </section>
+            </div>
 
-          <section className="space-y-4">
-            <SectionTitle index={3} title="축별·극별 정성 요약" />
-            {hasRun ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {state.run.axis_summaries.map((summary) => (
-                  <AxisSummaryCard key={summary.axis} summary={summary} />
-                ))}
+            <div className={styles.card}>
+              <h2>조사 개요</h2>
+              <div className={styles.body}>
+                {people?.length ? (
+                  [
+                    ["조사 성격", "도시기본계획에 대한 청년층 의견 수렴"],
+                    ["조사 기간", formatDayRange(people)],
+                    ["조사 방법", "유스플랜AI를 활용한 1:1 인터뷰"],
+                    [
+                      "모집 경로",
+                      "인천시청 홈페이지 및 SNS를 통한 QR코드 홍보",
+                    ],
+                  ].map(([label, value]) => (
+                    <div className={styles.mrow} key={label}>
+                      <span>{label}</span>
+                      <b>{value}</b>
+                    </div>
+                  ))
+                ) : (
+                  <NoData text="조사 개요는 분석을 실행하면 채워집니다." />
+                )}
               </div>
-            ) : (
-              <EmptyBlock />
-            )}
-          </section>
+            </div>
+          </div>
 
-          <section className="space-y-4">
-            <SectionTitle index={4} title="비식별 대표 인용" />
-            {hasRun ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                {state.run.axis_summaries.map((summary) => (
-                  <article
-                    key={summary.axis}
-                    className="rounded-2xl bg-card p-5"
-                  >
-                    <p className="text-[15px] font-bold">
-                      {AXIS_INFO[summary.axis].title}
-                    </p>
-                    <ul className="mt-3 space-y-2">
-                      {summary.quotes.map((quote) => (
-                        <li
-                          key={quote.quote_id}
-                          className="rounded-xl bg-muted px-3.5 py-2.5 text-[14px] leading-6"
-                        >
-                          <Link
-                            className="mr-2 font-mono text-[11px] font-bold text-primary hover:underline"
-                            href={`/admin/submissions/${quote.submission_id}`}
+          <div className={`${styles.col} ${styles.m}`}>
+            <div className={styles.card}>
+              <h2>
+                계획 부문별 요구 <em>건수 · 언급한 사람</em>
+                <span className={styles.sortsw}>
+                  <i className={styles.knob} ref={knobRef} />
+                  {([1, 2] as const).map((key, index) => (
+                    <b
+                      className={sortKey === key ? styles.on : ""}
+                      key={key}
+                      onClick={() => setSortKey(key)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        setSortKey(key);
+                      }}
+                      ref={(node) => {
+                        sortRefs.current[index] = node;
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      {key === 1 ? "건수순" : "사람수순"}
+                    </b>
+                  ))}
+                </span>
+                {aiChip("topics")}
+              </h2>
+              <div className={styles.body}>
+                {topicRows.length ? (
+                  topicRows.map((row) => (
+                    <div
+                      className={`${styles.sect} ${
+                        selection?.kind === "topic" &&
+                        selection.topic === row.topic
+                          ? styles.on
+                          : ""
+                      }`}
+                      key={row.topic}
+                      {...tip(
+                        `${row.topic} (${SECTIONS[row.topic]}) — 요구 ${row.demands}건, ${kpi?.participants ?? 0}명 중 ${row.people}명이 언급`,
+                      )}
+                      {...pick({ kind: "topic", topic: row.topic })}
+                    >
+                      <div className={styles.lb}>{row.topic}</div>
+                      <div className={styles.track}>
+                        <div
+                          className={styles.fill}
+                          style={{
+                            width: `${((sortKey === 1 ? row.demands : row.people) / topicMax) * 100}%`,
+                            background: "var(--blue)",
+                          }}
+                        />
+                      </div>
+                      <div className={styles.n}>
+                        <b>{sortKey === 1 ? row.demands : row.people}</b>
+                        {sortKey === 1
+                          ? `건 · ${row.people}명`
+                          : `명 · ${row.demands}건`}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <NoData text="계획 부문 집계가 아직 없습니다." />
+                )}
+              </div>
+            </div>
+
+            <div className={styles.card}>
+              <h2>
+                도시가치 4축
+                {aiChip("axes")}
+              </h2>
+              <div className={styles.body}>
+                {run ? (
+                  run.axis_stats.map((stat) => {
+                    const [left, right] = stat.poles;
+                    const total = left.count + right.count || 1;
+                    return (
+                      <div
+                        className={`${styles.ax} ${
+                          selection?.kind === "axis" &&
+                          selection.axis === stat.axis
+                            ? styles.on
+                            : ""
+                        }`}
+                        key={stat.axis}
+                        {...tip(
+                          `${axisTitle(stat.axis)} — 눌러서 극별 요구 경향과 발언 보기`,
+                        )}
+                        {...pick({ kind: "axis", axis: stat.axis })}
+                      >
+                        <div className={styles.h}>
+                          <b>{axisTitle(stat.axis)}</b>
+                          <span>{AXIS_QUESTION[stat.axis]}</span>
+                        </div>
+                        <div className={styles.bar}>
+                          <div
+                            className={`${styles.seg} ${styles.l}`}
+                            style={{
+                              width: `${(left.count / total) * 100}%`,
+                            }}
                           >
-                            {quote.quote_id}
-                          </Link>
-                          {quote.text}
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
-                ))}
+                            <span className={styles.cap}>
+                              {getPoleBadge(stat.axis, left.letter)}{" "}
+                              {left.count}명
+                            </span>
+                          </div>
+                          <div
+                            className={`${styles.seg} ${styles.r}`}
+                            style={{
+                              width: `${(right.count / total) * 100}%`,
+                            }}
+                          >
+                            <span className={styles.cap}>
+                              {getPoleBadge(stat.axis, right.letter)}{" "}
+                              {right.count}명
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <NoData text="축 집계가 아직 없습니다." />
+                )}
               </div>
-            ) : (
-              <EmptyBlock />
-            )}
-          </section>
-        </>
-      )}
+            </div>
 
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <SectionTitle index={5} title="축과 유형의 의미" />
-          <TypesHelpDialog />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {GUIDE.axes.map((guide) => (
-            <article key={guide.axis} className="rounded-2xl bg-card p-5">
-              <p className="font-mono text-[12px] font-bold text-primary">
-                {guide.display}
-              </p>
-              <h3 className="mt-1 text-[16px] font-bold">{guide.title}</h3>
-              <p className="mt-2 text-[13px] leading-6 text-muted-foreground">
-                {guide.measures}
-              </p>
-              <dl className="mt-4 space-y-3">
-                {guide.poles.map((pole) => (
-                  <div key={pole.letter}>
-                    <dt className="text-[13px] font-bold">
-                      {pole.letter} · {pole.name}
-                    </dt>
-                    <dd className="mt-1 text-[13px] leading-6 text-muted-foreground">
-                      {pole.description}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-              <div className="mt-4 rounded-xl bg-muted px-3.5 py-3">
-                <p className="text-[12px] font-bold text-incheon-gray">
-                  축 계보
-                </p>
-                <p className="mt-1 text-[13px] leading-6 text-muted-foreground">
-                  {guide.lineage}
-                </p>
+            <div className={styles.pair}>
+              <div className={styles.card}>
+                <h2>
+                  연령대별 요구사항 <em>요구 건수</em>
+                  {aiChip("cross")}
+                </h2>
+                <div
+                  className={`${styles.body} ${topics && cross ? styles.hm : ""}`}
+                >
+                  {topics && cross ? (
+                    <>
+                      <div className={styles.hh} />
+                      {AGE_BANDS.map((band) => (
+                        <div className={styles.hh} key={band}>
+                          {band}세
+                        </div>
+                      ))}
+                      {topics.map((row) => (
+                        <Fragment key={row.topic}>
+                          <div className={styles.rl}>{row.topic}</div>
+                          {(cross[row.topic] ?? []).map((value, index) => (
+                            <div
+                              className={styles.cell}
+                              key={AGE_BANDS[index]}
+                              style={{
+                                background:
+                                  value === 0
+                                    ? "#f2f5f7"
+                                    : `rgba(0,94,184,${0.12 + (0.78 * value) / crossMax})`,
+                                color:
+                                  value / crossMax > 0.55
+                                    ? "#fff"
+                                    : "var(--ink2)",
+                              }}
+                              {...tip(
+                                `${AGE_BANDS[index]}세가 말한 ${row.topic} 요구 ${value}건`,
+                              )}
+                              {...pick({ kind: "topic", topic: row.topic })}
+                            >
+                              {value || ""}
+                            </div>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </>
+                  ) : (
+                    <NoData text="교차 집계가 아직 없습니다." />
+                  )}
+                </div>
               </div>
-            </article>
-          ))}
+
+              <div className={styles.card}>
+                <h2>
+                  내가 바라는 도시 유형 <em>4축 조합 · 인원</em>
+                  {aiChip("types")}
+                </h2>
+                <div className={`${styles.body} ${styles.types}`}>
+                  {typeRows.length ? (
+                    typeRows.map(([code, count]) => (
+                      <div
+                        className={`${styles.ty} ${
+                          selection?.kind === "type" && selection.code === code
+                            ? styles.on
+                            : ""
+                        }`}
+                        key={code}
+                        {...tip(
+                          `${getCityType(code).nickname} — ${spellCode(code)}`,
+                        )}
+                        {...pick({ kind: "type", code })}
+                      >
+                        <code>{code}</code>
+                        <div className={styles.nm}>
+                          {getCityType(code).nickname}
+                        </div>
+                        <div className={styles.ax4}>{spellCode(code)}</div>
+                        <div className={styles.track}>
+                          <div
+                            className={styles.fill}
+                            style={{
+                              width: `${(count / typeMax) * 100}%`,
+                              background: "var(--blue)",
+                            }}
+                          />
+                        </div>
+                        <div className={styles.n}>{count}명</div>
+                      </div>
+                    ))
+                  ) : (
+                    <NoData text="유형 집계가 아직 없습니다." />
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DetailPanel
+            onClear={() => setSelection(null)}
+            onSelectPerson={(submissionId) =>
+              setSelection({ kind: "person", submissionId })
+            }
+            run={run}
+            selection={selection}
+          />
         </div>
-        <article className="rounded-2xl bg-card p-5">
-          <p className="font-mono text-[12px] font-bold text-primary">
-            {GUIDE.excluded_axis.display}
-          </p>
-          <h3 className="mt-1 text-[16px] font-bold">
-            {GUIDE.excluded_axis.title} · 제외한 축
-          </h3>
-          <p className="mt-2 max-w-4xl text-[13px] leading-6 text-muted-foreground">
-            {GUIDE.excluded_axis.reason}
-          </p>
-        </article>
-      </section>
+      </div>
+      <div className={styles.tip} ref={tipRef} />
     </div>
   );
 }

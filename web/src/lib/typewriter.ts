@@ -1,4 +1,4 @@
-import type { InterviewEvent, SessionState } from "@/lib/api";
+import type { InterviewEnd, InterviewEvent } from "@/lib/api";
 
 type RevealOptions = {
   onFirstDelta: () => void;
@@ -38,10 +38,10 @@ function pause(duration: number, signal: AbortSignal): Promise<void> {
 export async function revealStream(
   events: AsyncIterable<InterviewEvent>,
   { onFirstDelta, onText, signal }: RevealOptions,
-): Promise<SessionState> {
+): Promise<InterviewEnd> {
   const queue: string[] = [];
   let visible = "";
-  let state: SessionState | null = null;
+  let end: InterviewEnd | null = null;
   let finished = false;
   let failed: unknown;
   let firstDelta = true;
@@ -63,7 +63,7 @@ export async function revealStream(
           queue.push(...Array.from(event.text));
           notify();
         } else {
-          state = event.state;
+          end = { state: event.state, progress: event.progress };
         }
       }
     } catch (error) {
@@ -100,7 +100,7 @@ export async function revealStream(
 
   if (revealFailure) throw revealFailure;
   if (failed) throw failed;
-  if (!state) throw new Error("SSE stream has no terminal state");
+  if (!end) throw new Error("SSE stream has no terminal state");
 
-  return state;
+  return end;
 }

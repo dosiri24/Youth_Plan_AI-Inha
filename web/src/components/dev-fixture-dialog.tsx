@@ -2,14 +2,20 @@
 
 import { useEffect, useRef } from "react";
 
+import { AccessCodeForm } from "@/components/access-code-form";
 import { Button } from "@/components/ui/button";
 import type { DevFixture } from "@/lib/api";
 
+export type DevStage = "closed" | "code" | "fixtures";
+
 type DevFixtureDialogProps = {
-  open: boolean;
+  stage: DevStage;
   fixtures: DevFixture[];
   listing: boolean;
   loadingName: string | null;
+  codePending: boolean;
+  codeMessage: string | null;
+  onSubmitCode: (code: string) => void;
   onClose: () => void;
   onSelect: (name: string) => void;
 };
@@ -19,28 +25,30 @@ const FOCUSABLE =
 
 /** The developer picker must not leak focus into participant controls. */
 export function DevFixtureDialog({
-  open,
+  stage,
   fixtures,
   listing,
   loadingName,
+  codePending,
+  codeMessage,
+  onSubmitCode,
   onClose,
   onSelect,
 }: DevFixtureDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
-  const loadingRef = useRef(loadingName);
+  const busyRef = useRef(false);
+  const open = stage !== "closed";
+  const busy = loadingName !== null || (stage === "code" && codePending);
 
   useEffect(() => {
     closeRef.current = onClose;
-    loadingRef.current = loadingName;
-  }, [loadingName, onClose]);
+    busyRef.current = busy;
+  }, [busy, onClose]);
 
+  // The code stage and the picker stage swap controls, so focus is seated per stage.
   useEffect(() => {
     if (!open) return;
-
-    const previousFocus = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
 
     const frame = window.requestAnimationFrame(() => {
       const target =
@@ -49,10 +57,20 @@ export function DevFixtureDialog({
       target?.focus();
     });
 
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, stage]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        if (loadingRef.current === null) closeRef.current();
+        if (!busyRef.current) closeRef.current();
         return;
       }
 
@@ -81,7 +99,6 @@ export function DevFixtureDialog({
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
       previousFocus?.focus();
@@ -94,14 +111,12 @@ export function DevFixtureDialog({
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/35 p-0 sm:items-center sm:p-5"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && loadingName === null) {
-          onClose();
-        }
+        if (event.target === event.currentTarget && !busy) onClose();
       }}
     >
       <div
         ref={dialogRef}
-        aria-busy={listing || loadingName !== null}
+        aria-busy={busy || listing}
         aria-describedby="dev-mode-description"
         aria-labelledby="dev-mode-title"
         aria-modal="true"
@@ -116,41 +131,52 @@ export function DevFixtureDialog({
           id="dev-mode-title"
           className="mt-2 text-[22px] font-bold tracking-[-0.02em]"
         >
-          대화 묶음집 선택
+          {stage === "code" ? "코드를 입력해 주세요" : "대화 묶음집 선택"}
         </h2>
         <p
           id="dev-mode-description"
           className="mt-3 text-[15px] leading-6 text-muted-foreground"
         >
-          완주한 대화를 현재 세션에 불러와요. 불러오는 즉시 인터뷰가 종료되고
-          결과로 넘어갈 수 있어요.
+          {stage === "code"
+            ? "개발자 모드는 코드를 아는 사람만 열 수 있어요."
+            : "완주한 대화를 현재 세션에 불러와요. 불러오는 즉시 인터뷰가 종료되고 결과로 넘어갈 수 있어요."}
         </p>
 
-        <div className="mt-6 grid gap-2.5">
-          {listing ? (
-            <p className="py-4 text-center text-[14px] text-muted-foreground">
-              대화 묶음집을 불러오고 있어요
-            </p>
-          ) : (
-            fixtures.map((fixture) => (
-              <Button
-                key={fixture.name}
-                className="h-auto min-h-13 w-full justify-start rounded-2xl border-primary/15 bg-card px-4 py-3.5 text-left text-[14px] font-bold text-foreground hover:bg-secondary"
-                disabled={loadingName !== null}
-                onClick={() => onSelect(fixture.name)}
-                variant="outline"
-              >
-                {loadingName === fixture.name
-                  ? "대화를 불러오고 있어요"
-                  : fixture.label}
-              </Button>
-            ))
-          )}
-        </div>
+        {stage === "code" ? (
+          <div className="mt-6">
+            <AccessCodeForm
+              message={codeMessage}
+              onSubmit={onSubmitCode}
+              pending={codePending}
+            />
+          </div>
+        ) : (
+          <div className="mt-6 grid gap-2.5">
+            {listing ? (
+              <p className="py-4 text-center text-[14px] text-muted-foreground">
+                대화 묶음집을 불러오고 있어요
+              </p>
+            ) : (
+              fixtures.map((fixture) => (
+                <Button
+                  key={fixture.name}
+                  className="h-auto min-h-13 w-full justify-start rounded-2xl border-primary/15 bg-card px-4 py-3.5 text-left text-[14px] font-bold text-foreground hover:bg-secondary"
+                  disabled={loadingName !== null}
+                  onClick={() => onSelect(fixture.name)}
+                  variant="outline"
+                >
+                  {loadingName === fixture.name
+                    ? "대화를 불러오고 있어요"
+                    : fixture.label}
+                </Button>
+              ))
+            )}
+          </div>
+        )}
 
         <Button
           className="mt-3 h-13 w-full rounded-2xl text-[15px] font-bold"
-          disabled={loadingName !== null}
+          disabled={busy}
           onClick={onClose}
           variant="secondary"
         >

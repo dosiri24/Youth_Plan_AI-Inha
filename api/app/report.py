@@ -261,8 +261,7 @@ async def revise(
         "transcript": session.serialize_transcript(current["messages"]),
         "type_result": {
             "axes": [
-                {"axis": axis["axis"], "letter": axis["letter"]}
-                for axis in type_result["axes"]
+                {"axis": axis["axis"], "letter": axis["letter"]} for axis in type_result["axes"]
             ]
         },
         "axis_demands": current_report["axis_demands"],

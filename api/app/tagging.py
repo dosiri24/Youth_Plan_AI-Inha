@@ -12,9 +12,7 @@ from app.config import get_settings
 from app.prompts import load_scoring_instruction
 
 AxisName = Literal[*AXIS_NAMES]
-PoleName = Literal[
-    *tuple(pole for _axis, poles, _default in SCORING_AXES for pole in poles)
-]
+PoleName = Literal[*tuple(pole for _axis, poles, _default in SCORING_AXES for pole in poles)]
 # A Literal would emit an integer enum, which Gemini's Schema type accepts only as strings.
 Weight = Annotated[int, Field(ge=min(EVIDENCE_WEIGHTS), le=max(EVIDENCE_WEIGHTS))]
 TokenUsage = dict[str, int] | None
