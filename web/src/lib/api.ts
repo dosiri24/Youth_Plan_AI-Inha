@@ -40,6 +40,8 @@ export type AxisResult = {
   axis: AxisName;
   letter: AxisLetter;
   strength: number;
+  /** True when nothing in the interview scored this axis, so 51 is a default, not a tie. */
+  empty_axis: boolean;
 };
 
 export type TypeResult = {
@@ -51,7 +53,11 @@ export type SelfInfo = {
   nickname: string;
   birth_year: number;
   age_2040: number;
-  region: string;
+  /** What the participant actually said; the backend never corrects it. */
+  raw_region: string;
+  /** The 2026 district the backend resolved for aggregation, or empty. */
+  normalized_region: string;
+  region_table_version: string;
   dream_or_job: string;
 };
 
@@ -383,6 +389,8 @@ export type AxisDemandFull = {
 
 export type PersonalReportFull = Omit<PersonalReport, "axis_demands"> & {
   axis_demands: AxisDemandFull[];
+  /** What the participant said about trusting the survey itself, kept verbatim. */
+  participation_notes: Quote[];
 };
 
 export type SubmissionSummary = {

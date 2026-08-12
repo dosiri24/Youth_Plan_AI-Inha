@@ -14,7 +14,7 @@ function StoryOverview({ report }: ReportOverviewProps) {
     ["별명", info.nickname],
     ["출생연도", `${info.birth_year}년`],
     ["2040년의 나이", `${info.age_2040}세`],
-    ["거주 지역", info.region],
+    ["거주 지역", info.raw_region],
     ["꿈 또는 일", info.dream_or_job],
   ];
 
@@ -103,6 +103,11 @@ function DemandOverview({ report }: ReportOverviewProps) {
             </h3>
 
             <div className="mt-5 space-y-5">
+              {axisDemand.demands.length === 0 && (
+                <p className="rounded-[18px] bg-muted px-3.5 py-3 text-[14px] leading-6 text-muted-foreground">
+                  이번 대화에서는 이 이야기가 나오지 않았어요.
+                </p>
+              )}
               {axisDemand.demands.map((demand) => (
                 <div key={demand.id}>
                   <h4 className="text-[16px] font-bold">{demand.title}</h4>

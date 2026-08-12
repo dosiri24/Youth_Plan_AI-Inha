@@ -55,3 +55,5 @@ LSMD_ADM_SECT_UMD_인천/
 # One-off review screenshots. The dashboard contract is dashboard-mock.html,
 # not these evaluation captures.
 docs/dashboard-review/
+TUNING.md
+api/scripts/tuning/personas/

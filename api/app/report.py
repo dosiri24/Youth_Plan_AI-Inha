@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Self, TypedDict
 from google.genai import types
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app import gemini, session
+from app import axes, gemini, regions, session
 from app.axes import AXIS_NAMES
 from app.config import get_settings
 from app.prompts import load_report_prompt as load_prompt
@@ -19,6 +19,8 @@ TOPICS = ("일자리", "주거", "교통", "문화", "환경", "돌봄", "안전
 Topic = Literal[*TOPICS]
 Sentence = Annotated[str, Field(min_length=1)]
 TokenUsage = dict[str, int] | None
+# An axis with no evidence has no explanation, so the code states that instead of the model.
+EMPTY_AXIS_REASON = "이 대화에서는 이 부분을 판단할 이야기가 나오지 않았습니다."
 
 
 class StrictModel(BaseModel):
@@ -32,7 +34,7 @@ class StructuredSelfInfo(StrictModel):
     """Keep inferred identity fields within the three allowed strings."""
 
     nickname: str
-    region: str
+    raw_region: str
     dream_or_job: str
 
 
@@ -57,14 +59,15 @@ class StructuredAxisReason(StrictModel):
     """Keep each generated explanation tied to one ordered scoring axis."""
 
     axis: AxisName
-    reason: Annotated[str, Field(min_length=1, pattern=r"\S")]
+    # An axis without evidence has no reason to state, so the model returns an empty string.
+    reason: str
 
 
 class StructuredAxis(StrictModel):
-    """Prevent a generated axis from arriving empty or over-expanded."""
+    """Prevent a generated axis from over-expanding while allowing an unevidenced one."""
 
     axis: AxisName
-    demands: Annotated[list[StructuredDemand], Field(min_length=1, max_length=2)]
+    demands: Annotated[list[StructuredDemand], Field(max_length=2)]
 
     @model_validator(mode="after")
     def require_sequential_ids(self) -> Self:
@@ -82,6 +85,7 @@ class StructuredReport(StrictModel):
     summary: Annotated[list[Sentence], Field(min_length=1)]
     axis_reasons: Annotated[list[StructuredAxisReason], Field(min_length=4, max_length=4)]
     axis_demands: Annotated[list[StructuredAxis], Field(min_length=4, max_length=4)]
+    participation_notes: list[StructuredQuote]
 
     @model_validator(mode="after")
     def require_axis_order(self) -> Self:
@@ -107,12 +111,14 @@ class RevisedDemands(StrictModel):
 
 
 class SelfInfo(TypedDict):
-    """Keep backend-owned age fields beside model-extracted identity."""
+    """Keep backend-owned age and district fields beside model-extracted identity."""
 
     nickname: str
     birth_year: int
     age_2040: int
-    region: str
+    raw_region: str
+    normalized_region: str
+    region_table_version: str
     dream_or_job: str
 
 
@@ -165,6 +171,7 @@ class PersonalReport(TypedDict):
     summary: list[str]
     axis_reasons: list[AxisReason]
     axis_demands: list[AxisDemand]
+    participation_notes: list[Quote]
     meta: ReportMeta
 
 
@@ -191,13 +198,15 @@ class Draft:
 
 
 async def generate_draft(current: session.Session, type_result: TypeResult) -> Draft:
-    """Give structuring the slim transcript and fixed judgement context."""
+    """Give structuring the slim transcript, fixed judgement, and the axis contract."""
     structured_text, usage = await _generate(
         "structuring.md",
         json.dumps(
             {
                 "transcript": session.serialize_transcript(current["messages"]),
                 "type_result": type_result,
+                # Without the definitions the report has to guess what each letter means.
+                "axis_definitions": axes.load_definitions(),
             },
             ensure_ascii=False,
             separators=(",", ":"),
@@ -221,7 +230,7 @@ def assemble(
     type_result: TypeResult,
     draft: Draft,
 ) -> PersonalReport:
-    """Keep age, display letters, and lifecycle metadata backend-owned."""
+    """Keep age, district, display letters, and lifecycle metadata backend-owned."""
     extracted = draft.structured.self_info
     return {
         "session_id": current["session_id"],
@@ -229,12 +238,15 @@ def assemble(
             "nickname": extracted.nickname,
             "birth_year": current["birth_year"],
             "age_2040": current["age_2040"],
-            "region": extracted.region,
+            "raw_region": extracted.raw_region,
+            "normalized_region": regions.normalize(extracted.raw_region),
+            "region_table_version": regions.ALIAS_TABLE_VERSION,
             "dream_or_job": extracted.dream_or_job,
         },
         "summary": list(draft.structured.summary),
         "axis_reasons": _axis_reasons(draft.structured, type_result),
         "axis_demands": _axis_demands(draft.structured, type_result),
+        "participation_notes": [note.model_dump() for note in draft.structured.participation_notes],
         "meta": {
             "turn_count": max(
                 (message["turn"] for message in current["messages"]),
@@ -284,6 +296,7 @@ async def revise(
         "summary": list(current_report["summary"]),
         "axis_reasons": copy.deepcopy(current_report["axis_reasons"]),
         "axis_demands": _axis_demands(structured, type_result),
+        "participation_notes": copy.deepcopy(current_report["participation_notes"]),
         "meta": {
             **current_report["meta"],
             "revision_count": current["revision_count"] + 1,
@@ -332,13 +345,13 @@ def _axis_reasons(
     structured: StructuredReport,
     type_result: TypeResult,
 ) -> list[AxisReason]:
-    """Prevent Gemini from choosing letters for judgement explanations."""
-    letters = {axis["axis"]: axis["letter"] for axis in type_result["axes"]}
+    """Prevent Gemini from choosing letters or inventing a reason it has no evidence for."""
+    scored = {axis["axis"]: axis for axis in type_result["axes"]}
     return [
         {
             "axis": item.axis,
-            "letter": letters[item.axis],
-            "reason": item.reason,
+            "letter": scored[item.axis]["letter"],
+            "reason": (EMPTY_AXIS_REASON if scored[item.axis]["empty_axis"] else item.reason),
         }
         for item in structured.axis_reasons
     ]
@@ -373,6 +386,7 @@ def slim_type_result(type_result: TypeResult) -> dict[str, object]:
                 "axis": axis["axis"],
                 "letter": axis["letter"],
                 "strength": axis["strength"],
+                "empty_axis": axis["empty_axis"],
             }
             for axis in type_result["axes"]
         ],
@@ -380,8 +394,9 @@ def slim_type_result(type_result: TypeResult) -> dict[str, object]:
 
 
 def slim_report(personal_report: PersonalReport) -> dict[str, object]:
-    """Remove server-only quotes and topic tags from a participant response copy."""
+    """Remove server-only quotes, topic tags, and survey-trust notes from the participant copy."""
     slimmed = copy.deepcopy(personal_report)
+    slimmed.pop("participation_notes")
     for axis in slimmed["axis_demands"]:
         for demand in axis["demands"]:
             demand.pop("quotes")

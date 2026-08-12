@@ -54,9 +54,19 @@ function TypeResultCard({ axis }: { axis: AxisResultFull }) {
           </h3>
         </div>
         <span className="shrink-0 text-[15px] font-bold text-primary">
-          강도 {getDisplayStrength(axis.strength)}
+          {axis.empty_axis
+            ? "강도 없음"
+            : `강도 ${getDisplayStrength(axis.strength)}`}
         </span>
       </div>
+
+      {axis.empty_axis && (
+        <p className="mt-3 rounded-xl bg-muted px-3.5 py-2.5 text-[12px] leading-5 text-muted-foreground">
+          <span className="font-bold text-incheon-gray">증거 0건</span> · 이
+          축을 판단할 발화가 없어 기본 극 {axis.letter}로 채운 값입니다. 저장된
+          강도 51은 계산 결과가 아니므로 집계에서도 제외됩니다.
+        </p>
+      )}
 
       {singlePole && (
         <p className="mt-3 rounded-xl bg-muted px-3.5 py-2.5 text-[12px] leading-5 text-muted-foreground">
@@ -259,8 +269,9 @@ function SubmissionBody({ detail }: { detail: SubmissionDetail }) {
           </span>
         </div>
         <p className="mt-1.5 text-[14px] text-muted-foreground">
-          {self_info.region} · 2040년 {self_info.age_2040}세 ·{" "}
-          {self_info.dream_or_job} · {formatDateTime(detail.submitted_at)}
+          {self_info.normalized_region || self_info.raw_region} · 2040년{" "}
+          {self_info.age_2040}세 · {self_info.dream_or_job} ·{" "}
+          {formatDateTime(detail.submitted_at)}
         </p>
       </header>
 
@@ -292,6 +303,25 @@ function SubmissionBody({ detail }: { detail: SubmissionDetail }) {
           ))}
         </div>
       </section>
+
+      {report.participation_notes.length > 0 && (
+        <section className="space-y-4">
+          <SectionTitle label="개인 보고서" title="조사 신뢰와 참여 조건" />
+          <ul className="space-y-2 rounded-2xl bg-card p-5">
+            {report.participation_notes.map((note) => (
+              <li
+                key={`${note.turn}-${note.text}`}
+                className="text-[14px] leading-6"
+              >
+                <span className="mr-2 font-mono text-[12px] text-muted-foreground">
+                  턴 {note.turn}
+                </span>
+                {note.text}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="space-y-4">
         <SectionTitle label="유형 결과" title="축별 판정과 증거" />

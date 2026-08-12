@@ -348,18 +348,21 @@
       }
     ],
     "self_info": {
-      "region": "강화군",
       "dream_or_job": "부모님 펜션 일 돕기",
       "nickname": "태영",
       "age_2040": 49,
-      "birth_year": 1991
+      "birth_year": 1991,
+      "raw_region": "강화군",
+      "normalized_region": "강화군",
+      "region_table_version": "2026-07"
     },
     "session_id": "27f90d1b-4e12-48b3-9bd9-c1e1d1a90198",
     "meta": {
       "turn_count": 14,
       "created_at": "2026-08-10T06:11:56.365172Z",
       "revision_count": 0
-    }
+    },
+    "participation_notes": []
   },
   "evidence_log": [
     {
@@ -585,7 +588,9 @@
             "turn": 14
           }
         ],
-        "axis": "AC"
+        "axis": "AC",
+        "evidence_count": 5,
+        "empty_axis": false
       },
       {
         "letter": "N",
@@ -631,7 +636,9 @@
             "turn": 9
           }
         ],
-        "axis": "UN"
+        "axis": "UN",
+        "evidence_count": 5,
+        "empty_axis": false
       },
       {
         "letter": "W",
@@ -691,7 +698,9 @@
             "turn": 13
           }
         ],
-        "axis": "OW"
+        "axis": "OW",
+        "evidence_count": 7,
+        "empty_axis": false
       },
       {
         "letter": "H",
@@ -758,7 +767,9 @@
             "turn": 14
           }
         ],
-        "axis": "FH"
+        "axis": "FH",
+        "evidence_count": 8,
+        "empty_axis": false
       }
     ]
   },
@@ -766,8 +777,10 @@
     "age_2040": 49,
     "dream_or_job": "부모님 펜션 일 돕기",
     "nickname": "태영",
-    "region": "강화군",
-    "birth_year": 1991
+    "birth_year": 1991,
+    "raw_region": "강화군",
+    "normalized_region": "강화군",
+    "region_table_version": "2026-07"
   },
   "deidentified": {
     "axis_demands": [

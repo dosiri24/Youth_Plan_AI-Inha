@@ -138,6 +138,12 @@ export function RevisionForm({
                 </h3>
 
                 <div className="mt-5 space-y-5">
+                  {axisDemand.demands.length === 0 && (
+                    <p className="text-[14px] leading-6 text-muted-foreground">
+                      이번 대화에서는 이 이야기가 나오지 않아 고칠 문장이
+                      없어요.
+                    </p>
+                  )}
                   {axisDemand.demands.map((demand) => (
                     <div key={demand.id}>
                       <h4 className="text-[16px] font-bold">{demand.title}</h4>

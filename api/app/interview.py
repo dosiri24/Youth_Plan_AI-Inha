@@ -1,15 +1,29 @@
 import asyncio
 import json
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator
 from contextlib import suppress
 
 from google.genai import types
 
-from app import gemini, knowledge, prompts, session, tagging
-from app.axes import AXIS_NAMES, Evidence
-from app.config import get_settings
+from app import bank, gemini, knowledge, prompts, session, tagging
+from app.axes import Evidence
+from app.config import Settings, get_settings
+from app.lexicon import (
+    ANSWER_DEMANDS,
+    REFUSAL_MARKS,
+    REFUSAL_MAX_CHARS,
+    STOP_MARKS,
+    WH_WORDS,
+)
 from app.logging import log_event
 from app.trailer import TrailerParser
+
+# Fixed backend replies, so the model never counts violations or writes the closing itself.
+MALICIOUS_WARNING = (
+    "이런 말씀이 반복되면 대화가 자동으로 종료됩니다. 2040년 인천 이야기로 돌아가 주세요."
+)
+MALICIOUS_ABORT = "같은 발화가 반복되어 인터뷰를 종료합니다."
+MALICIOUS_LIMIT = 2
 
 
 def start(current: session.Session) -> AsyncIterator[str]:
@@ -31,7 +45,8 @@ async def _run(
     settings = get_settings()
     scoring_task = _start_scoring(current, user_text, turn)
     try:
-        contents = _build_contents(current, user_text, turn)
+        _resolve_answered_key(current, user_text, turn)
+        contents, question = _build_contents(current, user_text, turn)
         tool = knowledge.file_search_tool()
         config = types.GenerateContentConfig(
             system_instruction=prompts.build_fixed_prefix(current["age_2040"]),
@@ -61,24 +76,28 @@ async def _run(
             yield _sse("delta", {"text": result.text})
         assistant_text = "".join(visible_parts)
 
-        if result.aborted:
+        if result.malicious:
+            current["malicious_count"] += 1
+            aborting = current["malicious_count"] >= MALICIOUS_LIMIT
+            notice = MALICIOUS_ABORT if aborting else MALICIOUS_WARNING
+            yield _sse("delta", {"text": notice})
             if scoring_task is not None:
                 await _cancel_scoring(scoring_task, current["session_id"], turn)
             log_event(
-                "aborted",
+                "malicious",
                 session_id=current["session_id"],
                 token_usage=token_usage,
                 turn=turn,
+                count=current["malicious_count"],
             )
-            session.discard_session(current["session_id"])
-            progress = _progress(
-                current["evidence_log"],
-                turn,
-                "aborted",
-                settings.axis_min_evidence,
-                settings.interview_target_turns,
+            if aborting:
+                session.discard_session(current["session_id"])
+                yield _sse("end", {"state": "aborted", "progress": 0})
+                return
+            yield _sse(
+                "end",
+                {"state": "continue", "progress": _progress(turn, "continue", settings)},
             )
-            yield _sse("end", {"state": "aborted", "progress": progress})
             return
 
         evidence = (
@@ -86,32 +105,22 @@ async def _run(
             if scoring_task is not None
             else []
         )
-        _save_turn(current, turn, user_text, assistant_text, evidence)
-        if result.ended:
+        _save_turn(current, turn, user_text, assistant_text, evidence, question)
+
+        ended = result.ended and _may_end(current, turn, user_text, assistant_text, settings)
+        if result.ended and not ended:
+            log_event("termination_withheld", session_id=current["session_id"], turn=turn)
+        if ended:
             current["status"] = "ended"
-            log_event(
-                "ended",
-                session_id=current["session_id"],
-                token_usage=token_usage,
-                turn=turn,
-            )
-            state = "ended"
-        else:
-            log_event(
-                "turn_progress",
-                session_id=current["session_id"],
-                token_usage=token_usage,
-                turn=turn,
-            )
-            state = "continue"
-        progress = _progress(
-            current["evidence_log"],
-            turn,
-            state,
-            settings.axis_min_evidence,
-            settings.interview_target_turns,
+        log_event(
+            "ended" if ended else "turn_progress",
+            session_id=current["session_id"],
+            token_usage=token_usage,
+            turn=turn,
+            **_question_shape(assistant_text),
         )
-        yield _sse("end", {"state": state, "progress": progress})
+        state = "ended" if ended else "continue"
+        yield _sse("end", {"state": state, "progress": _progress(turn, state, settings)})
     finally:
         if scoring_task is not None and not scoring_task.done():
             scoring_task.cancel()
@@ -121,8 +130,8 @@ def _build_contents(
     current: session.Session,
     user_text: str | None,
     turn: int,
-) -> list[types.Content]:
-    """Build full conversation contents with the current utterance last."""
+) -> tuple[list[types.Content], bank.Question | None]:
+    """Build full conversation contents with the current utterance and its instruction last."""
     contents = [
         _content("user" if message["role"] == "user" else "model", message["text"])
         for message in current["messages"]
@@ -131,24 +140,43 @@ def _build_contents(
         # Gemini requires contents even without participant input, so the opening uses
         # backend guidance to preserve that distinction.
         contents.append(_content("user", prompts.build_opening_instruction()))
-        return contents
+        return contents, None
 
     settings = get_settings()
-    assembled = prompts.append_operational_instruction(
+    assembled, question = prompts.append_operational_instruction(
         user_text,
         current["evidence_log"],
         turn,
         settings.interview_wrapup_turn,
-        settings.interview_target_turns,
-        settings.axis_min_evidence,
+        current["asked_keys"],
+        current["answered_keys"],
     )
     contents.append(_content("user", assembled))
-    return contents
+    return contents, question
 
 
 def _content(role: str, text: str) -> types.Content:
     """Build one text-only Gemini conversation content item."""
     return types.Content(role=role, parts=[types.Part.from_text(text=text)])
+
+
+def _resolve_answered_key(
+    current: session.Session,
+    user_text: str | None,
+    turn: int,
+) -> None:
+    """Close the outstanding answer slot before the next one is chosen."""
+    if user_text is None or not current["asked_keys"]:
+        return
+    latest = list(current["asked_keys"])[-1]
+    if latest in current["answered_keys"] or is_refusal(user_text):
+        return
+    current["answered_keys"][latest] = turn
+
+
+def is_refusal(text: str) -> bool:
+    """Report whether one utterance declines its slot rather than filling it."""
+    return len(text.strip()) <= REFUSAL_MAX_CHARS and _matches(text, REFUSAL_MARKS)
 
 
 def _save_turn(
@@ -157,38 +185,64 @@ def _save_turn(
     user_text: str | None,
     assistant_text: str,
     evidence: list[Evidence],
+    question: bank.Question | None,
 ) -> None:
     """Persist one completed stream into the in-memory session."""
     if user_text is None:
         session.save_greeting(current, assistant_text)
-    else:
-        session.save_turn(current, turn, user_text, assistant_text)
-        current["evidence_log"].extend(evidence)
+        return
+    session.save_turn(current, turn, user_text, assistant_text)
+    current["evidence_log"].extend(evidence)
+    if question is not None:
+        current["asked_keys"][question.answer_key] = turn
 
 
-def _progress(
-    evidence: Sequence[Evidence],
+def _may_end(
+    current: session.Session,
     turn: int,
-    state: str,
-    axis_min_evidence: int,
-    target_turns: int,
-) -> int:
-    """Calculate the participant progress percentage from coverage and turn ratios."""
+    user_text: str | None,
+    assistant_text: str,
+    settings: Settings,
+) -> bool:
+    """Decide whether this session has earned the right to close on this turn."""
+    if user_text is not None and _matches(user_text, STOP_MARKS):
+        return True
+    # The closing sequence ends only after the participant answers the final-remarks question.
+    if not prompts.termination_allowed(
+        turn,
+        settings.interview_wrapup_turn,
+        current["answered_keys"],
+    ):
+        return False
+    return not _matches(assistant_text, ANSWER_DEMANDS)
+
+
+def _matches(text: str, marks: tuple[str, ...]) -> bool:
+    """Report whether any listed surface form appears in one utterance."""
+    return any(mark in text for mark in marks)
+
+
+def _question_shape(assistant_text: str) -> dict[str, int | bool]:
+    """Record the two surface counts that flag a turn as a candidate double question.
+
+    These are candidates, not verdicts: only a human reading the turn can settle whether
+    two independent answer slots were opened.
+    """
+    return {
+        "question_marks": assistant_text.count("?"),
+        "wh_words": sum(word in assistant_text for word in WH_WORDS),
+        # The interviewer addresses the participant directly, so this word is always a leak.
+        "meta_leak": "참여자" in assistant_text,
+    }
+
+
+def _progress(turn: int, state: str, settings: Settings) -> int:
+    """Calculate the participant progress percentage from the backend's turn plan."""
     if state == "aborted" or turn == 0:
         return 0
     if state == "ended":
         return 100
-
-    covered = sum(
-        min(
-            sum(item["axis"] == axis for item in evidence),
-            axis_min_evidence,
-        )
-        for axis in AXIS_NAMES
-    )
-    coverage_ratio = covered / (len(AXIS_NAMES) * axis_min_evidence)
-    turn_ratio = min(turn / target_turns, 1)
-    return int(min(coverage_ratio, turn_ratio) * 100)
+    return int(min(turn / settings.interview_target_turns, 1) * 100)
 
 
 def _start_scoring(

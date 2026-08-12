@@ -62,6 +62,10 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
           변화를 함께 정리하는 서비스예요. 들려주신 목소리는 미래 도시를 계획할
           때 청년의 관점이 빠지지 않도록 돕는 소중한 자료가 됩니다.
         </p>
+        {/* The only place the duration is stated, so the interviewer never guesses it. */}
+        <p className="mt-3 text-[15px] font-semibold text-incheon-green">
+          대화는 5분에서 8분 정도 걸려요.
+        </p>
       </div>
 
       <form className="mt-10 shrink-0" onSubmit={submit}>

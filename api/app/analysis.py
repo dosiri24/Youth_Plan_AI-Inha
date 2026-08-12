@@ -8,7 +8,7 @@ from uuid import uuid4
 from google.genai import types
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app import gemini, scoring, store
+from app import gemini, regions, scoring, store
 from app.axes import AXIS_NAMES, DISPLAY_AXES, SCORING_AXES
 from app.config import get_settings
 from app.logging import log_event
@@ -21,20 +21,6 @@ TokenUsage = dict[str, int] | None
 CandidateTable = dict[str, dict[str, dict[str, str]]]
 
 AGE_BANDS = (("19~24", 19, 24), ("25~29", 25, 29), ("30~34", 30, 34), ("35~39", 35, 39))
-REGIONS = (
-    "제물포구",
-    "영종구",
-    "미추홀구",
-    "연수구",
-    "남동구",
-    "부평구",
-    "계양구",
-    "서해구",
-    "검단구",
-    "강화군",
-    "옹진군",
-)
-REGION_ALIASES = {"중구": "제물포구", "동구": "제물포구", "서구": "서해구"}
 TOPICS = ("일자리", "주거", "교통", "문화", "환경", "돌봄", "안전", "교육", "상권")
 
 # This temporary mapping applies only to the demo's AI-generated resident sample.
@@ -74,10 +60,10 @@ class DeidentifiedDemand(StrictModel):
 
 
 class DeidentifiedAxis(StrictModel):
-    """Accept one axis of de-identified demand text."""
+    """Accept one axis of de-identified demand text, including an unevidenced empty one."""
 
     axis: AxisName
-    demands: Annotated[list[DeidentifiedDemand], Field(min_length=1, max_length=2)]
+    demands: Annotated[list[DeidentifiedDemand], Field(max_length=2)]
 
 
 class DeidentifiedResponse(StrictModel):
@@ -297,7 +283,7 @@ def dashboard_aggregates(
             age_counts[band][gender] += 1
             included_ages.append(age)
 
-        region = _normalize_region(info["region"])
+        region = info["normalized_region"]
         if region:
             region_counts[region] += 1
 
@@ -332,7 +318,9 @@ def dashboard_aggregates(
         TOPICS,
         key=lambda topic: (-topic_demands[topic], -topic_people[topic], TOPICS.index(topic)),
     )
-    regions_count = {region: region_counts[region] for region in REGIONS if region_counts[region]}
+    regions_count = {
+        region: region_counts[region] for region in regions.DISTRICTS if region_counts[region]
+    }
     people.sort(key=lambda item: item["submitted_at"], reverse=True)
     return {
         "kpi": {
@@ -371,13 +359,6 @@ def _age_band_index(age: int) -> int | None:
         if minimum <= age <= maximum:
             return index
     return None
-
-
-def _normalize_region(region: str) -> str:
-    """Map only contracted district names and legacy aliases to 2026 districts."""
-    if region in REGIONS:
-        return region
-    return REGION_ALIASES.get(region, "")
 
 
 def _person(

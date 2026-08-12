@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     gcp_project_id: str | None = None
     interview_target_turns: int = 15
     interview_wrapup_turn: int = 12
-    axis_min_evidence: int = 2
     dev_mode: bool = False
     access_code: str = ""
     web_origin: str = "http://localhost:3000"

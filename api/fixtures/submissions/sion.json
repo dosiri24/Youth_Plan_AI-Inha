@@ -5,8 +5,10 @@
     "nickname": "시온",
     "birth_year": 1999,
     "age_2040": 41,
-    "region": "중구",
-    "dream_or_job": "체육 관련 일 및 러닝크루 운영"
+    "dream_or_job": "체육 관련 일 및 러닝크루 운영",
+    "raw_region": "중구",
+    "normalized_region": "제물포구",
+    "region_table_version": "2026-07"
   },
   "raw_transcript": [
     {
@@ -527,7 +529,9 @@
             "text": "2040년의 인천이 정말 활기차고 멋진 모습이 됐으면 좋겠네요",
             "turn": 14
           }
-        ]
+        ],
+        "evidence_count": 10,
+        "empty_axis": false
       },
       {
         "axis": "UN",
@@ -608,7 +612,9 @@
             "text": "기술이 발전해도 바다 냄새나 흙냄새 같은 자연의 느낌이 인공적인 걸로 덮이지 않았으면 좋겠어요",
             "turn": 13
           }
-        ]
+        ],
+        "evidence_count": 10,
+        "empty_axis": false
       },
       {
         "axis": "OW",
@@ -675,7 +681,9 @@
             "text": "주민들이 주도하는 소소한 운동 모임들이 계속 생겨나야 북적임 속에서도 진짜 '우리 동네'라는 느낌을 잃지 않을 것 같습니다",
             "turn": 12
           }
-        ]
+        ],
+        "evidence_count": 8,
+        "empty_axis": false
       },
       {
         "axis": "FH",
@@ -749,7 +757,9 @@
             "text": "옛 포구 근처나 나무 그늘 아래처럼 정겨운 분위기가 유지되는 곳에서 우리끼리 안부를 묻는 문화가 계속되길 바라요",
             "turn": 12
           }
-        ]
+        ],
+        "evidence_count": 9,
+        "empty_axis": false
       }
     ]
   },
@@ -759,8 +769,10 @@
       "nickname": "시온",
       "birth_year": 1999,
       "age_2040": 41,
-      "region": "중구",
-      "dream_or_job": "체육 관련 일 및 러닝크루 운영"
+      "dream_or_job": "체육 관련 일 및 러닝크루 운영",
+      "raw_region": "중구",
+      "normalized_region": "제물포구",
+      "region_table_version": "2026-07"
     },
     "summary": [
       "2040년의 시온 님은 영종의 바다와 갯벌이 주는 탁 트인 풍경 속에서 이웃들과 함께 활기차게 달리는 일상을 꿈꿉니다.",
@@ -913,7 +925,8 @@
       "turn_count": 14,
       "revision_count": 0,
       "created_at": "2026-08-10T01:42:58.180791+00:00"
-    }
+    },
+    "participation_notes": []
   },
   "deidentified": null,
   "submission_id": "1afb012a-5e6f-4676-acdc-dcc12372e2f8"

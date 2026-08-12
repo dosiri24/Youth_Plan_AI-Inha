@@ -15,6 +15,22 @@ type CityTypeCardProps = {
 /** Short pole badges tie each bar back to the badge row that identifies the type. */
 function StrengthBar({ result }: { result: AxisResult }) {
   const info = AXIS_INFO[result.axis];
+
+  // An unevidenced axis is scored at its default pole, so a percentage here would
+  // present a fallback as a measurement.
+  if (result.empty_axis) {
+    return (
+      <div>
+        <p className="text-[11px] font-bold text-muted-foreground">
+          {info.title}
+        </p>
+        <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
+          이번 대화에서는 이 이야기가 나오지 않았어요.
+        </p>
+      </div>
+    );
+  }
+
   const leftWins = result.letter === info.left.letter;
   const strength = getDisplayStrength(result.strength);
   const leftStrength = leftWins ? strength : 100 - strength;

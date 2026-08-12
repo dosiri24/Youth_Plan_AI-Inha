@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.base import RequestResponseEndpoint
 
-from app import analysis, interview, report, scoring, session, store
+from app import analysis, interview, prompts, report, scoring, session, store
 from app.config import get_settings
 from app.logging import configure_logging, log_event
 
@@ -71,8 +71,12 @@ class DeleteSubmissionRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Log application startup."""
-    log_event("startup")
+    """Log application startup with the identifiers every tuning measurement is filed under."""
+    log_event(
+        "startup",
+        model=get_settings().gemini_model,
+        prompts=prompts.prompt_fingerprint(),
+    )
     yield
 
 
@@ -318,7 +322,11 @@ def _submission_summary(document: store.Document) -> dict[str, object]:
         "submission_id": document["submission_id"],
         "submitted_at": document["submitted_at"],
         "nickname": personal_report["self_info"]["nickname"],
-        "region": personal_report["self_info"]["region"],
+        # The list shows the district it aggregates by, falling back to what was actually said.
+        "region": (
+            personal_report["self_info"]["normalized_region"]
+            or personal_report["self_info"]["raw_region"]
+        ),
         "type_code": document["type_result"]["code"],
         "turn_count": personal_report["meta"]["turn_count"],
         "revision_count": personal_report["meta"]["revision_count"],

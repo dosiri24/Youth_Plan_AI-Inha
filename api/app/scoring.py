@@ -12,6 +12,8 @@ class AxisResult(TypedDict):
     letter: str
     strength: int
     scores: dict[str, int]
+    evidence_count: int
+    empty_axis: bool
     evidence: list[Evidence]
 
 
@@ -44,6 +46,7 @@ def _score_axis(
         pole: sum(item["weight"] for item in axis_evidence if item["pole"] == pole)
         for pole in poles
     }
+    # A default letter at 51 and a near-tie at 51 print the same, so the record separates them.
     if not axis_evidence:
         log_event("empty_axis", session_id=session_id, axis=axis)
         return {
@@ -51,6 +54,8 @@ def _score_axis(
             "letter": default,
             "strength": 51,
             "scores": scores,
+            "evidence_count": 0,
+            "empty_axis": True,
             "evidence": axis_evidence,
         }
 
@@ -62,6 +67,8 @@ def _score_axis(
         "letter": winner,
         "strength": strength,
         "scores": scores,
+        "evidence_count": len(axis_evidence),
+        "empty_axis": False,
         "evidence": axis_evidence,
     }
 
