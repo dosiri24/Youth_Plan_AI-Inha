@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import mapData from "@/data/incheon_map.json";
 import styles from "./dashboard.module.css";
+import type { Reveal } from "./motion";
 import type { TipHandlers } from "./tip";
 
 type District = { name: string; d: string; x: number; y: number };
@@ -28,9 +29,13 @@ const CLIP_ID = "incheon-map-clip";
 type Props = {
   counts: Record<string, number>;
   onSelect: (region: string, count: number) => void;
+  reveal: Reveal;
   selected: string | null;
   tip: (text: string) => TipHandlers;
 };
+
+/** Gap between districts as the colour washes in, busiest first. */
+const INK_STEP = 80;
 
 /** Breathing room between the district outline and the highlight box. */
 const HIGHLIGHT_PAD = 4;
@@ -40,7 +45,13 @@ const HIGHLIGHT_PAD = 4;
  * cropped to keep the mainland large, and Ongjin-gun, which falls outside it,
  * gets its own box at the lower left.
  */
-export function IncheonMapCard({ counts, onSelect, selected, tip }: Props) {
+export function IncheonMapCard({
+  counts,
+  onSelect,
+  reveal,
+  selected,
+  tip,
+}: Props) {
   const seaRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const pathRefs = useRef<Record<string, SVGPathElement | null>>({});
@@ -75,6 +86,12 @@ export function IncheonMapCard({ counts, onSelect, selected, tip }: Props) {
   const ink = (n: number) => (n / max > 0.55 ? "#fff" : "#3d4448");
   const halo = (n: number) =>
     n / max > 0.55 ? "rgba(0,50,100,.55)" : "rgba(255,255,255,.85)";
+
+  const order = [...MAP.d.map((district) => district.name), "옹진군"].sort(
+    (left, right) => (counts[right] ?? 0) - (counts[left] ?? 0),
+  );
+  const inkLag = (region: string) =>
+    reveal.lag(order.indexOf(region) * INK_STEP);
 
   const clickable = (region: string, n: number) => ({
     ...tip(n ? `${region} ${n}명` : `${region} 참여자 없음`),
@@ -118,7 +135,7 @@ export function IncheonMapCard({ counts, onSelect, selected, tip }: Props) {
                       aria-label={`${district.name} ${n}명`}
                       className={styles.dist}
                       d={district.d}
-                      fill={fill(n)}
+                      fill={reveal.grown ? fill(n) : "#fff"}
                       key={district.name}
                       ref={(node) => {
                         pathRefs.current[district.name] = node;
@@ -126,6 +143,7 @@ export function IncheonMapCard({ counts, onSelect, selected, tip }: Props) {
                       stroke="#fff"
                       strokeLinejoin="round"
                       strokeWidth="1.6"
+                      style={inkLag(district.name)}
                       {...clickable(district.name, n)}
                     />
                   );
@@ -134,7 +152,14 @@ export function IncheonMapCard({ counts, onSelect, selected, tip }: Props) {
                   const n = counts[district.name] ?? 0;
                   const [dx, dy] = NUDGE[district.name] ?? [0, 0];
                   return (
-                    <g key={district.name}>
+                    <g
+                      className={styles.dtext}
+                      key={district.name}
+                      style={{
+                        opacity: reveal.grown ? 1 : 0,
+                        ...inkLag(district.name),
+                      }}
+                    >
                       <text
                         className={styles.dlab}
                         style={{ fill: ink(n), stroke: halo(n) }}
@@ -174,6 +199,7 @@ export function IncheonMapCard({ counts, onSelect, selected, tip }: Props) {
               style={{
                 width: ONJIN_BOX.w * scale,
                 height: ONJIN_BOX.h * scale,
+                ...inkLag("옹진군"),
               }}
               {...clickable("옹진군", onjinCount)}
             >
@@ -183,12 +209,12 @@ export function IncheonMapCard({ counts, onSelect, selected, tip }: Props) {
               >
                 <path
                   d={MAP.inset.d}
-                  fill={fill(onjinCount)}
+                  fill={reveal.grown ? fill(onjinCount) : "#fff"}
                   stroke="#16181a"
                   strokeWidth="0.6"
                 />
               </svg>
-              <b>
+              <b style={{ opacity: reveal.grown ? 1 : 0 }}>
                 옹진군<span>{onjinCount}명</span>
               </b>
             </div>

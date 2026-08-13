@@ -43,11 +43,9 @@ npm-debug.log*
 .idea/
 .DS_Store
 data/plan2040_summary.md
-0725_도시기본계획_요약.txt
 도시TI_4축_해설.md
 
 paper.md
-memo.txt
 docs/interview-lab/
 .gitignore
 LSMD_ADM_SECT_UMD_인천/
@@ -55,5 +53,7 @@ LSMD_ADM_SECT_UMD_인천/
 # One-off review screenshots. The dashboard contract is dashboard-mock.html,
 # not these evaluation captures.
 docs/dashboard-review/
-TUNING.md
-api/scripts/tuning/personas/
+
+# Tuning records stay local; the published repo carries system code only.
+AI_Tuning_workspace_260813/
+PROJECT_STATUS.md

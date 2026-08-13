@@ -5,13 +5,11 @@ from contextlib import suppress
 
 from google.genai import types
 
-from app import bank, gemini, knowledge, prompts, session, tagging
+from app import gemini, knowledge, prompts, session, tagging
 from app.axes import Evidence
 from app.config import Settings, get_settings
 from app.lexicon import (
     ANSWER_DEMANDS,
-    REFUSAL_MARKS,
-    REFUSAL_MAX_CHARS,
     STOP_MARKS,
     WH_WORDS,
 )
@@ -45,8 +43,7 @@ async def _run(
     settings = get_settings()
     scoring_task = _start_scoring(current, user_text, turn)
     try:
-        _resolve_answered_key(current, user_text, turn)
-        contents, question = _build_contents(current, user_text, turn)
+        contents = _build_contents(current, user_text, turn)
         tool = knowledge.file_search_tool()
         config = types.GenerateContentConfig(
             system_instruction=prompts.build_fixed_prefix(current["age_2040"]),
@@ -105,9 +102,9 @@ async def _run(
             if scoring_task is not None
             else []
         )
-        _save_turn(current, turn, user_text, assistant_text, evidence, question)
+        _save_turn(current, turn, user_text, assistant_text, evidence)
 
-        ended = result.ended and _may_end(current, turn, user_text, assistant_text, settings)
+        ended = result.ended and _may_end(turn, user_text, assistant_text, settings)
         if result.ended and not ended:
             log_event("termination_withheld", session_id=current["session_id"], turn=turn)
         if ended:
@@ -130,7 +127,7 @@ def _build_contents(
     current: session.Session,
     user_text: str | None,
     turn: int,
-) -> tuple[list[types.Content], bank.Question | None]:
+) -> list[types.Content]:
     """Build full conversation contents with the current utterance and its instruction last."""
     contents = [
         _content("user" if message["role"] == "user" else "model", message["text"])
@@ -140,43 +137,21 @@ def _build_contents(
         # Gemini requires contents even without participant input, so the opening uses
         # backend guidance to preserve that distinction.
         contents.append(_content("user", prompts.build_opening_instruction()))
-        return contents, None
+        return contents
 
     settings = get_settings()
-    assembled, question = prompts.append_operational_instruction(
+    assembled = prompts.append_operational_instruction(
         user_text,
-        current["evidence_log"],
         turn,
         settings.interview_wrapup_turn,
-        current["asked_keys"],
-        current["answered_keys"],
     )
     contents.append(_content("user", assembled))
-    return contents, question
+    return contents
 
 
 def _content(role: str, text: str) -> types.Content:
     """Build one text-only Gemini conversation content item."""
     return types.Content(role=role, parts=[types.Part.from_text(text=text)])
-
-
-def _resolve_answered_key(
-    current: session.Session,
-    user_text: str | None,
-    turn: int,
-) -> None:
-    """Close the outstanding answer slot before the next one is chosen."""
-    if user_text is None or not current["asked_keys"]:
-        return
-    latest = list(current["asked_keys"])[-1]
-    if latest in current["answered_keys"] or is_refusal(user_text):
-        return
-    current["answered_keys"][latest] = turn
-
-
-def is_refusal(text: str) -> bool:
-    """Report whether one utterance declines its slot rather than filling it."""
-    return len(text.strip()) <= REFUSAL_MAX_CHARS and _matches(text, REFUSAL_MARKS)
 
 
 def _save_turn(
@@ -185,7 +160,6 @@ def _save_turn(
     user_text: str | None,
     assistant_text: str,
     evidence: list[Evidence],
-    question: bank.Question | None,
 ) -> None:
     """Persist one completed stream into the in-memory session."""
     if user_text is None:
@@ -193,12 +167,9 @@ def _save_turn(
         return
     session.save_turn(current, turn, user_text, assistant_text)
     current["evidence_log"].extend(evidence)
-    if question is not None:
-        current["asked_keys"][question.answer_key] = turn
 
 
 def _may_end(
-    current: session.Session,
     turn: int,
     user_text: str | None,
     assistant_text: str,
@@ -207,14 +178,7 @@ def _may_end(
     """Decide whether this session has earned the right to close on this turn."""
     if user_text is not None and _matches(user_text, STOP_MARKS):
         return True
-    # The closing sequence ends only after the participant answers the final-remarks question.
-    if not prompts.termination_allowed(
-        turn,
-        settings.interview_wrapup_turn,
-        current["answered_keys"],
-    ):
-        return False
-    return not _matches(assistant_text, ANSWER_DEMANDS)
+    return turn >= settings.interview_wrapup_turn and not _matches(assistant_text, ANSWER_DEMANDS)
 
 
 def _matches(text: str, marks: tuple[str, ...]) -> bool:

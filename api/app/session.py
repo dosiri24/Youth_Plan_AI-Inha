@@ -37,9 +37,6 @@ class Session(TypedDict):
     age_2040: int
     messages: list[Message]
     evidence_log: list[Evidence]
-    # Turn ownership lets undo reopen questions and retract answers independently.
-    asked_keys: dict[str, int]
-    answered_keys: dict[str, int]
     malicious_count: int
     status: Literal["active", "ended", "result_ready", "submitted"]
     type_result: TypeResult | None
@@ -60,8 +57,6 @@ def create_session(birth_year: int) -> Session:
         "age_2040": 2040 - birth_year,
         "messages": [],
         "evidence_log": [],
-        "asked_keys": {},
-        "answered_keys": {},
         "malicious_count": 0,
         "status": "active",
         "type_result": None,
@@ -118,17 +113,6 @@ def undo_last_turn(current: Session) -> int | None:
     current["evidence_log"] = [
         item for item in current["evidence_log"] if item["turn"] != last_turn
     ]
-    # An undone turn never really asked its question, so the slot reopens with the turn.
-    reopened = [key for key, turn in current["asked_keys"].items() if turn == last_turn]
-    for key in reopened:
-        del current["asked_keys"][key]
-    retracted = [
-        key
-        for key, turn in current["answered_keys"].items()
-        if turn == last_turn or key not in current["asked_keys"]
-    ]
-    for key in retracted:
-        del current["answered_keys"][key]
     return last_turn
 
 

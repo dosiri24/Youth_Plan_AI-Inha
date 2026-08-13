@@ -229,6 +229,15 @@ export function InterviewScreen({
     inputRef.current?.focus();
   }, [focusTick]);
 
+  // Safari ignores field-sizing, so the box is measured here instead of by the browser.
+  useEffect(() => {
+    const box = inputRef.current;
+    if (box === null) return;
+
+    box.style.height = "auto";
+    box.style.height = `${box.scrollHeight}px`;
+  }, [input]);
+
   /** Taking a turn back means the participant gets their own words back, ready to edit. */
   const revert = useCallback((reverted: Turn) => {
     setMessages((current) =>
@@ -560,7 +569,7 @@ export function InterviewScreen({
             <textarea
               id="interview-message"
               ref={inputRef}
-              className="max-h-28 min-h-10 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-base leading-6 outline-none [field-sizing:content] placeholder:text-muted-foreground/70 disabled:cursor-not-allowed"
+              className="max-h-56 min-h-10 flex-1 resize-none overflow-y-auto bg-transparent py-2 text-base leading-6 outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed"
               disabled={
                 status !== "active" ||
                 streaming ||

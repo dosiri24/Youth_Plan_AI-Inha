@@ -64,7 +64,7 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
         </p>
         {/* The only place the duration is stated, so the interviewer never guesses it. */}
         <p className="mt-3 text-[15px] font-semibold text-incheon-green">
-          대화는 5분에서 8분 정도 걸려요.
+          AI와 인터뷰는 5~10분 정도 소요됩니다.
         </p>
       </div>
 

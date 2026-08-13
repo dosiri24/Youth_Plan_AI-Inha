@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 
 import { getPoleBadge } from "@/lib/city-axes";
@@ -31,6 +32,7 @@ import {
 } from "./dashboard-data";
 import { DetailPanel, type Selection } from "./detail-panel";
 import { IncheonMapCard } from "./incheon-map";
+import { CountUp, useReveal, useSlide } from "./motion";
 import { useTip } from "./tip";
 
 const STAGE_WIDTH = 1920;
@@ -57,6 +59,8 @@ export default function Dashboard() {
   const knobPlaced = useRef(false);
 
   const { tipRef, tip } = useTip();
+  const reveal = useReveal(run);
+  const slide = useSlide(sortKey);
 
   useEffect(() => {
     void getLatestAnalysis()
@@ -180,10 +184,28 @@ export default function Dashboard() {
   const cross = run?.cross;
   const people = run?.people;
 
-  const summary: [string, string, string][] = [
-    ["참여자수", kpi ? String(kpi.participants) : "—", kpi ? "명" : ""],
-    ["수집된 세부 요구", kpi ? String(kpi.demands) : "—", kpi ? "건" : ""],
-    ["참여 자치구수", kpi ? `${kpi.regions} / 11` : "—", kpi ? "곳" : ""],
+  const summary: [string, ReactNode, string][] = [
+    [
+      "참여자수",
+      kpi ? <CountUp reveal={reveal} value={kpi.participants} /> : "—",
+      kpi ? "명" : "",
+    ],
+    [
+      "수집된 세부 요구",
+      kpi ? <CountUp reveal={reveal} value={kpi.demands} /> : "—",
+      kpi ? "건" : "",
+    ],
+    [
+      "참여 자치구수",
+      kpi ? (
+        <>
+          <CountUp reveal={reveal} value={kpi.regions} /> / 11
+        </>
+      ) : (
+        "—"
+      ),
+      kpi ? "곳" : "",
+    ],
     ["참여 목적", "2045 인천도시기본계획", ""],
   ];
 
@@ -214,7 +236,9 @@ export default function Dashboard() {
   return (
     <div className={styles.root}>
       <div
-        className={`${styles.stage} ${aiMode ? styles.aion : ""}`}
+        className={`${styles.stage} ${aiMode ? styles.aion : ""} ${
+          reveal.hold ? styles.hold : ""
+        }`}
         style={{
           transform: `translate(${(-STAGE_WIDTH / 2) * fit}px, ${(-STAGE_HEIGHT / 2) * fit}px) scale(${fit})`,
           visibility: scale === null ? "hidden" : "visible",
@@ -288,6 +312,7 @@ export default function Dashboard() {
                   onSelect={(region) =>
                     setSelection({ kind: "region", region })
                   }
+                  reveal={reveal}
                   selected={
                     selection?.kind === "region" ? selection.region : null
                   }
@@ -311,7 +336,7 @@ export default function Dashboard() {
               </h2>
               <div className={styles.body}>
                 {ages ? (
-                  ages.map((band) => (
+                  ages.map((band, index) => (
                     <div
                       className={styles.agerow}
                       key={band.band}
@@ -324,13 +349,23 @@ export default function Dashboard() {
                       <div className={styles.track}>
                         <div
                           className={`${styles.sex} ${styles.m}`}
-                          style={{ width: `${(band.male / ageMax) * 100}%` }}
+                          style={{
+                            width: reveal.grown
+                              ? `${(band.male / ageMax) * 100}%`
+                              : 0,
+                            ...reveal.lag(index * 110),
+                          }}
                         >
                           {band.male || ""}
                         </div>
                         <div
                           className={`${styles.sex} ${styles.f}`}
-                          style={{ width: `${(band.female / ageMax) * 100}%` }}
+                          style={{
+                            width: reveal.grown
+                              ? `${(band.female / ageMax) * 100}%`
+                              : 0,
+                            ...reveal.lag(index * 110),
+                          }}
                         >
                           {band.female || ""}
                         </div>
@@ -399,7 +434,7 @@ export default function Dashboard() {
               </h2>
               <div className={styles.body}>
                 {topicRows.length ? (
-                  topicRows.map((row) => (
+                  topicRows.map((row, index) => (
                     <div
                       className={`${styles.sect} ${
                         selection?.kind === "topic" &&
@@ -408,6 +443,7 @@ export default function Dashboard() {
                           : ""
                       }`}
                       key={row.topic}
+                      ref={slide(row.topic)}
                       {...tip(
                         `${row.topic} (${SECTIONS[row.topic]}) — 요구 ${row.demands}건, ${kpi?.participants ?? 0}명 중 ${row.people}명이 언급`,
                       )}
@@ -418,8 +454,11 @@ export default function Dashboard() {
                         <div
                           className={styles.fill}
                           style={{
-                            width: `${((sortKey === 1 ? row.demands : row.people) / topicMax) * 100}%`,
+                            width: reveal.grown
+                              ? `${((sortKey === 1 ? row.demands : row.people) / topicMax) * 100}%`
+                              : 0,
                             background: "var(--blue)",
+                            ...reveal.lag(index * 90),
                           }}
                         />
                       </div>
@@ -444,7 +483,7 @@ export default function Dashboard() {
               </h2>
               <div className={styles.body}>
                 {run ? (
-                  run.axis_stats.map((stat) => {
+                  run.axis_stats.map((stat, index) => {
                     const [left, right] = stat.poles;
                     const total = left.count + right.count || 1;
                     return (
@@ -469,7 +508,10 @@ export default function Dashboard() {
                           <div
                             className={`${styles.seg} ${styles.l}`}
                             style={{
-                              width: `${(left.count / total) * 100}%`,
+                              width: reveal.grown
+                                ? `${(left.count / total) * 100}%`
+                                : 0,
+                              ...reveal.lag(index * 140),
                             }}
                           >
                             <span className={styles.cap}>
@@ -480,7 +522,10 @@ export default function Dashboard() {
                           <div
                             className={`${styles.seg} ${styles.r}`}
                             style={{
-                              width: `${(right.count / total) * 100}%`,
+                              width: reveal.grown
+                                ? `${(right.count / total) * 100}%`
+                                : 0,
+                              ...reveal.lag(index * 140),
                             }}
                           >
                             <span className={styles.cap}>
@@ -515,7 +560,7 @@ export default function Dashboard() {
                           {band}세
                         </div>
                       ))}
-                      {topics.map((row) => (
+                      {topics.map((row, rowIndex) => (
                         <Fragment key={row.topic}>
                           <div className={styles.rl}>{row.topic}</div>
                           {(cross[row.topic] ?? []).map((value, index) => (
@@ -523,14 +568,17 @@ export default function Dashboard() {
                               className={styles.cell}
                               key={AGE_BANDS[index]}
                               style={{
-                                background:
-                                  value === 0
+                                background: !reveal.grown
+                                  ? "#fff"
+                                  : value === 0
                                     ? "#f2f5f7"
                                     : `rgba(0,94,184,${0.12 + (0.78 * value) / crossMax})`,
-                                color:
-                                  value / crossMax > 0.55
+                                color: !reveal.grown
+                                  ? "transparent"
+                                  : value / crossMax > 0.55
                                     ? "#fff"
                                     : "var(--ink2)",
+                                ...reveal.lag((rowIndex + index) * 56),
                               }}
                               {...tip(
                                 `${AGE_BANDS[index]}세가 말한 ${row.topic} 요구 ${value}건`,
@@ -556,7 +604,7 @@ export default function Dashboard() {
                 </h2>
                 <div className={`${styles.body} ${styles.types}`}>
                   {typeRows.length ? (
-                    typeRows.map(([code, count]) => (
+                    typeRows.map(([code, count], index) => (
                       <div
                         className={`${styles.ty} ${
                           selection?.kind === "type" && selection.code === code
@@ -578,8 +626,13 @@ export default function Dashboard() {
                           <div
                             className={styles.fill}
                             style={{
-                              width: `${(count / typeMax) * 100}%`,
+                              width: reveal.grown
+                                ? `${(count / typeMax) * 100}%`
+                                : 0,
                               background: "var(--blue)",
+                              /* The list is as long as the sample, so the
+                                 stagger stops before the intro runs out. */
+                              ...reveal.lag(Math.min(index, 10) * 90),
                             }}
                           />
                         </div>
