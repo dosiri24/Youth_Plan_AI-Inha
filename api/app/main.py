@@ -2,7 +2,7 @@ import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import uuid4
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response, status
@@ -24,6 +24,7 @@ class CreateSessionRequest(BaseModel):
     """Represent the mock-auth session creation request."""
 
     birth_year: Annotated[int, Field(strict=True, ge=1900, le=2026)]
+    gender: Literal["male", "female", "other"]
 
 
 class CreateSessionResponse(BaseModel):
@@ -122,7 +123,7 @@ def health() -> dict[str, str]:
 @app.post("/api/sessions", response_model=CreateSessionResponse)
 def create_interview(request: CreateSessionRequest) -> CreateSessionResponse:
     """Create one active in-memory interview session."""
-    current = session.create_session(request.birth_year)
+    current = session.create_session(request.birth_year, request.gender)
     log_event("session_created", session_id=current["session_id"])
     return CreateSessionResponse(session_id=current["session_id"])
 

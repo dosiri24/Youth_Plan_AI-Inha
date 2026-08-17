@@ -206,7 +206,7 @@ export default function Dashboard() {
       ),
       kpi ? "곳" : "",
     ],
-    ["참여 목적", "2045 인천도시기본계획", ""],
+    ["참여 목적", "2040 인천도시기본계획", ""],
   ];
 
   const ageMax = Math.max(1, ...(ages ?? []).map((band) => band.total));
@@ -342,7 +342,7 @@ export default function Dashboard() {
                       key={band.band}
                       {...tip(
                         `${band.band}세 ${band.total}명 — 남 ${band.male}명 · 여 ${band.female}명` +
-                          (band.unknown ? ` · 미상 ${band.unknown}명` : ""),
+                          (band.other ? ` · 기타 ${band.other}명` : ""),
                       )}
                     >
                       <div className={styles.lb}>{band.band}세</div>
@@ -599,7 +599,7 @@ export default function Dashboard() {
 
               <div className={styles.card}>
                 <h2>
-                  내가 바라는 도시 유형 <em>4축 조합 · 인원</em>
+                  내가 바라는 도시유형 <em>4축 조합 · 인원</em>
                   {aiChip("types")}
                 </h2>
                 <div className={`${styles.body} ${styles.types}`}>

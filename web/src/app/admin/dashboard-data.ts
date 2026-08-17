@@ -5,7 +5,7 @@ export const AXIS_ORDER: AxisName[] = ["AC", "UN", "OW", "FH"];
 
 /** The dashboard is the only screen that asks each axis as a question. */
 export const AXIS_QUESTION: Record<AxisName, string> = {
-  AC: "하루가 어떤 속도로 흐르길 바라는가",
+  AC: "동네와 거리가 얼마나 붐비길 바라는가",
   UN: "집을 나섰을 때 어떤 풍경을 원하는가",
   OW: "도시가 무엇을 먼저 챙기길 바라는가",
   FH: "변화를 어떻게 받아들이는가",
@@ -31,7 +31,7 @@ export const AI_CARD_TITLES = {
   topics: "계획 부문별 요구",
   axes: "도시가치 4축",
   cross: "연령대별 요구사항",
-  types: "내가 바라는 도시 유형",
+  types: "내가 바라는 도시유형",
 };
 
 /** The four-letter code does not read on its own, so each axis leaning is spelled out. */

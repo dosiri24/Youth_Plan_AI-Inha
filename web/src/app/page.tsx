@@ -6,7 +6,7 @@ import { InterviewScreen } from "@/components/interview-screen";
 import { MobileShell } from "@/components/mobile-shell";
 import { ResultScreen } from "@/components/result-screen";
 import { Button } from "@/components/ui/button";
-import { createSession } from "@/lib/api";
+import { createSession, type Gender } from "@/lib/api";
 
 type Screen =
   | { name: "start" }
@@ -21,6 +21,12 @@ function isValidBirthYear(value: string): boolean {
   return year >= 1900 && year <= 2026;
 }
 
+const GENDER_OPTIONS: { value: Gender; label: string }[] = [
+  { value: "male", label: "남성" },
+  { value: "female", label: "여성" },
+  { value: "other", label: "기타" },
+];
+
 type StartScreenProps = {
   onError: () => void;
   onStart: (sessionId: string) => void;
@@ -29,18 +35,30 @@ type StartScreenProps = {
 /** The entry explains why participation matters before requesting verification. */
 function StartScreen({ onError, onStart }: StartScreenProps) {
   const [birthYear, setBirthYear] = useState("");
+  const [gender, setGender] = useState<Gender | null>(null);
+  const [genderSlides, setGenderSlides] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [pending, setPending] = useState(false);
   const valid = isValidBirthYear(birthYear);
   const invalid = birthYear.length > 0 && !valid;
+  const genderIndex = GENDER_OPTIONS.findIndex(
+    (option) => option.value === gender,
+  );
+
+  // Sliding turns on only once a choice already exists, so the first one fades in
+  // where it was picked instead of travelling there from the left edge.
+  const chooseGender = (value: Gender) => {
+    if (gender !== null) setGenderSlides(true);
+    setGender(value);
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!valid || !agreed || pending) return;
+    if (!valid || gender === null || !agreed || pending) return;
 
     setPending(true);
     try {
-      onStart(await createSession(Number(birthYear)));
+      onStart(await createSession(Number(birthYear), gender));
     } catch {
       onError();
     } finally {
@@ -69,12 +87,21 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
       </div>
 
       <form className="mt-10 shrink-0" onSubmit={submit}>
-        <label
-          className="block text-[14px] font-bold text-foreground"
-          htmlFor="birth-year"
-        >
-          출생연도
-        </label>
+        {/* The error shares the label's line so appearing and clearing costs no vertical space. */}
+        <div className="flex items-baseline justify-between gap-3">
+          <label
+            className="text-[14px] font-bold text-foreground"
+            htmlFor="birth-year"
+          >
+            출생연도
+          </label>
+          <p
+            id="birth-year-error"
+            className={`shrink-0 text-[12px] whitespace-nowrap text-muted-foreground ${invalid ? "visible" : "invisible"}`}
+          >
+            1900~2026년으로 입력해 주세요
+          </p>
+        </div>
         <input
           id="birth-year"
           aria-describedby={invalid ? "birth-year-error" : undefined}
@@ -92,17 +119,65 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
           placeholder="예: 2000"
           value={birthYear}
         />
-        <p
-          id="birth-year-error"
-          className={`mt-2 min-h-5 text-[13px] text-muted-foreground ${invalid ? "visible" : "invisible"}`}
-        >
-          1900년부터 2026년 사이로 입력해 주세요.
-        </p>
-        <div className="mt-4 rounded-2xl bg-muted/60 p-4">
+        <fieldset className="mt-1.5" disabled={pending}>
+          <legend className="sr-only">성별</legend>
+          {/* Same radius token as the input above, which at this height resolves to a pill. */}
+          <div className="relative h-8 w-full rounded-2xl bg-muted p-[2px]">
+            {/* Position and appearance are split so enabling the slide cannot cut the fade short. */}
+            <div
+              className={`absolute inset-y-[2px] left-[2px] w-[calc((100%_-_4px)/3)] ${
+                genderSlides
+                  ? "transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+                  : ""
+              }`}
+              style={{
+                transform: `translateX(${Math.max(genderIndex, 0) * 100}%)`,
+              }}
+            >
+              <div
+                className={`size-full rounded-full bg-card shadow-[0_1px_3px_rgba(23,25,26,0.1)] transition-opacity duration-300 ease-out motion-reduce:transition-none ${
+                  genderIndex >= 0 ? "opacity-100" : "opacity-0"
+                }`}
+              />
+            </div>
+            <div className="relative flex h-full">
+              {GENDER_OPTIONS.map((option) => {
+                const checked = gender === option.value;
+
+                return (
+                  // The label reaches past the rail so the bar can look thin while the thumb stays a full finger tall.
+                  <label
+                    className="-my-2 flex flex-1 cursor-pointer py-2 has-[:disabled]:cursor-not-allowed"
+                    key={option.value}
+                  >
+                    <input
+                      checked={checked}
+                      className="peer sr-only"
+                      name="gender"
+                      onChange={() => chooseGender(option.value)}
+                      type="radio"
+                      value={option.value}
+                    />
+                    <span
+                      className={`flex flex-1 items-center justify-center rounded-full text-[15px] transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 ${
+                        checked
+                          ? "font-bold text-primary"
+                          : "font-semibold text-muted-foreground"
+                      }`}
+                    >
+                      {option.label}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </fieldset>
+        <div className="mt-5 rounded-2xl bg-muted/60 p-4">
           <p className="text-[13px] leading-6 text-muted-foreground">
-            유스플랜AI는 인터뷰 진행과 정책 분석을 위해 출생연도, 인터뷰 대화
-            내용, 대화 중 언급한 별명·거주 지역·꿈 또는 직업을 수집해요. 수집한
-            내용은 인천시 청년정책 연구 자료로만 쓰고, 시범운영이 끝나면
+            유스플랜AI는 인터뷰 진행과 정책 분석을 위해 출생연도와 성별, 인터뷰
+            대화 내용, 대화 중 언급한 별명·거주 지역·꿈 또는 직업을 수집해요.
+            수집한 내용은 인천시 청년정책 연구 자료로만 쓰고, 시범운영이 끝나면
             파기해요.
           </p>
           <div className="mt-3 flex items-start gap-2.5">
@@ -124,7 +199,7 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
         </div>
         <Button
           className={`mt-4 h-14 w-full rounded-2xl text-base font-bold ${agreed ? "bg-verify text-white hover:bg-verify/90" : "bg-muted text-muted-foreground"}`}
-          disabled={!agreed || !valid || pending}
+          disabled={!agreed || !valid || gender === null || pending}
           type="submit"
         >
           {pending ? "본인인증을 확인하고 있어요" : "본인인증하고 인터뷰하기"}

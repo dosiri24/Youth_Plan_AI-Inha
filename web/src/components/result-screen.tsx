@@ -125,7 +125,7 @@ function Submitted({
           내 목소리가 제출됐어요
         </h1>
         <p className="mt-2 text-[15px] leading-6 text-muted-foreground">
-          도시 유형 카드를 공유하거나 이미지로 간직해 보세요.
+          도시유형 카드를 공유하거나 이미지로 간직해 보세요.
         </p>
       </header>
 

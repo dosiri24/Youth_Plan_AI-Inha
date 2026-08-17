@@ -35,6 +35,7 @@ class Session(TypedDict):
     session_id: str
     birth_year: int
     age_2040: int
+    gender: Literal["male", "female", "other"]
     messages: list[Message]
     evidence_log: list[Evidence]
     malicious_count: int
@@ -48,13 +49,17 @@ class Session(TypedDict):
 sessions: dict[str, Session] = {}
 
 
-def create_session(birth_year: int) -> Session:
+def create_session(
+    birth_year: int,
+    gender: Literal["male", "female", "other"],
+) -> Session:
     """Create and retain one active in-memory interview session."""
     session_id = str(uuid4())
     current: Session = {
         "session_id": session_id,
         "birth_year": birth_year,
         "age_2040": 2040 - birth_year,
+        "gender": gender,
         "messages": [],
         "evidence_log": [],
         "malicious_count": 0,

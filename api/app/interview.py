@@ -118,6 +118,16 @@ async def _run(
         )
         state = "ended" if ended else "continue"
         yield _sse("end", {"state": state, "progress": _progress(turn, state, settings)})
+    # Participant-initiated stops (CancelledError, GeneratorExit) subclass BaseException,
+    # so they deliberately bypass failure logging.
+    except Exception as error:
+        log_event(
+            "turn_failed",
+            session_id=current["session_id"],
+            turn=turn,
+            reason=type(error).__name__,
+        )
+        raise
     finally:
         if scoring_task is not None and not scoring_task.done():
             scoring_task.cancel()

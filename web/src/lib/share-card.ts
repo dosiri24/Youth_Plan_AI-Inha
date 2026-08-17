@@ -78,7 +78,7 @@ export async function shareTypeCard(
   await navigator.share({
     files: [file],
     title: `유스플랜AI ${typeName}`,
-    text: "내가 바라는 2040년 인천의 도시 유형이에요.",
+    text: "내가 바라는 2040년 인천의 도시유형이에요.",
   });
 }
 

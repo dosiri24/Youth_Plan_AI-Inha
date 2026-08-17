@@ -13,7 +13,7 @@ export function AxisReasons({ reasons }: AxisReasonsProps) {
         id="axis-reasons-title"
         className="text-[24px] font-bold tracking-[-0.03em]"
       >
-        도시 유형 세부 결과
+        도시유형 세부 결과
       </h2>
       <p className="mt-3 text-[15px] leading-6 text-muted-foreground">
         중요하게 여긴 도시의 모습을 네 가지 축으로 풀어봤어요.

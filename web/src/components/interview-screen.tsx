@@ -85,7 +85,7 @@ const MessageRow = memo(function MessageRow({
       }
     >
       <p className="mb-1.5 px-1 text-[12px] font-semibold text-muted-foreground">
-        {role === "user" ? "나" : "하늘"}
+        {role === "user" ? "나" : "바다"}
       </p>
       <div
         className={
@@ -97,7 +97,7 @@ const MessageRow = memo(function MessageRow({
         {text}
         {showThinking && (
           <span
-            aria-label="하늘이 답변을 생각하고 있어요"
+            aria-label="바다가 답변을 생각하고 있어요"
             className="flex h-6 items-center gap-1.5 px-0.5"
           >
             <span className="size-1.5 animate-pulse rounded-full bg-incheon-gray/45" />
@@ -430,7 +430,7 @@ export function InterviewScreen({
                 className={`size-2 rounded-full ${status === "aborted" ? "bg-incheon-gray" : "bg-incheon-green"}`}
               />
               <p className="text-[15px] font-bold">
-                {status === "active" ? "하늘과 인터뷰 중" : "인터뷰 종료"}
+                {status === "active" ? "바다와 인터뷰 중" : "인터뷰 종료"}
               </p>
             </div>
           </div>
@@ -533,7 +533,7 @@ export function InterviewScreen({
                   이야기를 모두 나눴어요
                 </h2>
                 <p className="mt-2 text-[15px] leading-6 text-muted-foreground">
-                  하늘의 마지막 인사를 읽었다면 결과를 확인하러 가세요.
+                  바다의 마지막 인사를 읽었다면 결과를 확인하러 가세요.
                 </p>
                 <Button
                   className="mt-5 h-14 w-full rounded-2xl text-[16px] font-bold"
@@ -584,7 +584,7 @@ export function InterviewScreen({
                 status === "ended"
                   ? "인터뷰가 종료됐어요"
                   : streaming
-                    ? "하늘의 답변을 기다리고 있어요"
+                    ? "바다의 답변을 기다리고 있어요"
                     : "답변을 입력해 주세요"
               }
               rows={1}

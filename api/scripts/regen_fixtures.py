@@ -66,7 +66,7 @@ def write(path: Path, document: dict) -> None:
 
 async def run_interview(name: str, rules: str, spec: dict, out_dir: Path) -> dict:
     """Complete one simulated interview and write its transcript fixture."""
-    current = session.create_session(spec["birth_year"])
+    current = session.create_session(spec["birth_year"], spec["gender"])
     await drain(interview.start(current))
 
     for turn in range(1, MAX_TURNS + 1):
@@ -86,6 +86,7 @@ async def run_interview(name: str, rules: str, spec: dict, out_dir: Path) -> dic
             "name": name,
             "label": spec["label"],
             "birth_year": spec["birth_year"],
+            "gender": spec["gender"],
             "messages": isoformat_messages(current["messages"]),
             "evidence_log": current["evidence_log"],
         },

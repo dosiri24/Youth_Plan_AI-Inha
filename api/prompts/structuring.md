@@ -6,11 +6,12 @@
 
 ## 입력
 
-최초 생성 입력은 다음 세 필드를 가진 JSON 객체입니다.
+최초 생성 입력은 다음 네 필드를 가진 JSON 객체입니다.
 
 - `transcript`: `turn`, `role`, `text`만 가진 대화 메시지 배열
 - `type_result`: 코드가 확정한 유형 판정 결과. 축마다 `evidence_count`와 `empty_axis`가 함께 들어 있습니다
 - `axis_definitions`: 네 축과 여덟 극의 정의
+- `districts`: 현재 인천의 자치구 이름 목록
 
 수정 입력은 `transcript`, 축별 `axis`와 `letter`만 남긴 `type_result`, 현재 `axis_demands`, `selected_sentences`, `comment`를 가집니다. 수정 입력의 처리와 출력은 아래 "수정 요청을 받은 경우" 절을 따르십시오.
 
@@ -41,7 +42,8 @@
 대화록의 참여자 발화에서 참여자가 스스로 밝힌 것을 뽑아냅니다.
 
 - `nickname`: 참여자가 불러 달라고 한 이름이나 별명. 참여자가 말하지 않았거나 거절했으면 빈 문자열입니다. 인터뷰어가 임의로 부른 호칭을 여기에 넣지 마십시오
-- `raw_region`: 참여자가 사는 곳을 **말한 그대로** 옮깁니다. 군·구 단위로 고치거나 옛 이름을 현행 이름으로 바꾸지 마십시오. 정규화는 코드가 합니다
+- `raw_region`: 참여자가 사는 곳을 **말한 그대로** 옮깁니다. 군·구 단위로 고치거나 옛 이름을 현행 이름으로 바꾸지 마십시오
+- `normalized_region`: `districts` 목록에서 정확히 하나를 고릅니다. 참여자가 동네나 섬 이름으로 답했다면 그곳이 속한 자치구를 골라야 합니다. 확정할 수 없으면 빈 문자열을 두고, 목록 밖의 이름은 절대 만들지 마십시오
 - `dream_or_job`: 지금 하는 일이나 앞으로 하고 싶은 일
 
 말하지 않은 항목은 빈 문자열로 두십시오. 추측해서 채우지 마십시오.
@@ -138,6 +140,7 @@
   "self_info": {
     "nickname": "string",
     "raw_region": "string",
+    "normalized_region": "string",
     "dream_or_job": "string"
   },
   "summary": ["string", "string"],

@@ -49,10 +49,14 @@ export type TypeResult = {
   axes: AxisResult[];
 };
 
+/** "other" holds both a different gender and a participant who declined to say. */
+export type Gender = "male" | "female" | "other";
+
 export type SelfInfo = {
   nickname: string;
   birth_year: number;
   age_2040: number;
+  gender: Gender;
   /** What the participant actually said; the backend never corrects it. */
   raw_region: string;
   /** The 2026 district the backend resolved for aggregation, or empty. */
@@ -245,13 +249,16 @@ async function* openStream(
 }
 
 /** The client intentionally retains only a volatile session identifier. */
-export async function createSession(birthYear: number): Promise<string> {
+export async function createSession(
+  birthYear: number,
+  gender: Gender,
+): Promise<string> {
   const response = await request("/api/sessions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ birth_year: birthYear }),
+    body: JSON.stringify({ birth_year: birthYear, gender }),
   });
   const data = (await response.json()) as SessionResponse;
 
@@ -456,7 +463,7 @@ export type AgeBand = {
   band: string;
   male: number;
   female: number;
-  unknown: number;
+  other: number;
   total: number;
 };
 
@@ -475,7 +482,7 @@ export type PersonDemand = {
 export type DashboardPerson = {
   submission_id: string;
   nickname: string;
-  gender: "male" | "female" | "unknown";
+  gender: Gender;
   age: number;
   region: string;
   code: string;

@@ -23,22 +23,6 @@ CandidateTable = dict[str, dict[str, dict[str, str]]]
 AGE_BANDS = (("19~24", 19, 24), ("25~29", 25, 29), ("30~34", 30, 34), ("35~39", 35, 39))
 TOPICS = ("일자리", "주거", "교통", "문화", "환경", "돌봄", "안전", "교육", "상권")
 
-# This temporary mapping applies only to the demo's AI-generated resident sample.
-GENDERS = {
-    "시온": "male",
-    "성민": "male",
-    "준호": "male",
-    "태영": "male",
-    "도현": "male",
-    "수현": "female",
-    "은채": "female",
-    "소윤": "female",
-    "가영": "female",
-    "지우": "female",
-    "민서": "female",
-    "하은": "female",
-}
-
 
 class NoSubmissionsError(Exception):
     """Signal that an analysis run has no stored input."""
@@ -264,7 +248,7 @@ def dashboard_aggregates(
     reference_year: int,
 ) -> dict[str, object]:
     """Build every code-calculated dashboard field from stored submissions."""
-    age_counts = {band: Counter({"male": 0, "female": 0, "unknown": 0}) for band, _, _ in AGE_BANDS}
+    age_counts = {band: Counter({"male": 0, "female": 0, "other": 0}) for band, _, _ in AGE_BANDS}
     region_counts: Counter[str] = Counter()
     topic_demands: Counter[str] = Counter()
     topic_people: Counter[str] = Counter()
@@ -277,7 +261,9 @@ def dashboard_aggregates(
         info = document["self_info"]
         age = _age(info, reference_year)
         band_index = _age_band_index(age)
-        gender = GENDERS.get(info["nickname"], "unknown")
+        declared_gender = info.get("gender")
+        # Only documents stored before the form schema can contain another value.
+        gender = declared_gender if declared_gender in ("male", "female") else "other"
         if band_index is not None:
             band = AGE_BANDS[band_index][0]
             age_counts[band][gender] += 1
@@ -309,7 +295,7 @@ def dashboard_aggregates(
                 "band": band,
                 "male": counts["male"],
                 "female": counts["female"],
-                "unknown": counts["unknown"],
+                "other": counts["other"],
                 "total": sum(counts.values()),
             }
         )

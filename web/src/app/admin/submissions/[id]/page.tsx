@@ -17,6 +17,7 @@ import {
   type AxisDemandFull,
   type AxisReason,
   type AxisResultFull,
+  type SelfInfo,
   type SubmissionDetail,
   type TranscriptMessage,
 } from "@/lib/api";
@@ -254,6 +255,13 @@ export default function SubmissionDetailPage({
   );
 }
 
+/** "기타" also holds participants who declined to say, so it is never read as missing data. */
+const GENDER_LABEL: Record<SelfInfo["gender"], string> = {
+  male: "남자",
+  female: "여자",
+  other: "기타",
+};
+
 function SubmissionBody({ detail }: { detail: SubmissionDetail }) {
   const { self_info, type_result, report, raw_transcript } = detail;
 
@@ -270,8 +278,8 @@ function SubmissionBody({ detail }: { detail: SubmissionDetail }) {
         </div>
         <p className="mt-1.5 text-[14px] text-muted-foreground">
           {self_info.normalized_region || self_info.raw_region} · 2040년{" "}
-          {self_info.age_2040}세 · {self_info.dream_or_job} ·{" "}
-          {formatDateTime(detail.submitted_at)}
+          {self_info.age_2040}세 · {GENDER_LABEL[self_info.gender]} ·{" "}
+          {self_info.dream_or_job} · {formatDateTime(detail.submitted_at)}
         </p>
       </header>
 

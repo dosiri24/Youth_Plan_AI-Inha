@@ -199,7 +199,7 @@ function regionView(
             <tr>
               <th>별명</th>
               <th>나이</th>
-              <th>도시 유형</th>
+              <th>도시유형</th>
             </tr>
           </thead>
           <tbody>
@@ -241,7 +241,7 @@ function typeView(run: AnalysisRun, code: string): View {
   const type = getCityType(code);
 
   return {
-    label: "내가 바라는 도시 유형",
+    label: "내가 바라는 도시유형",
     title: type.nickname,
     sub: `${spellCode(code)} · ${run.type_distribution[code] ?? 0}명`,
     body: (

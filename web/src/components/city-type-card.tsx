@@ -81,7 +81,7 @@ export const CityTypeCard = forwardRef<HTMLDivElement, CityTypeCardProps>(
     // to a typography panel and stops rendering the image element entirely.
     const [imageFailed, setImageFailed] = useState(false);
     // An extracted nickname can come back empty, and the rasterized card must still read cleanly.
-    const owner = nickname ? `${nickname}님의 도시 유형` : "내 도시 유형";
+    const owner = nickname ? `${nickname}님의 도시유형` : "내 도시유형";
 
     return (
       <div

@@ -31,10 +31,11 @@ class StrictModel(BaseModel):
 
 
 class StructuredSelfInfo(StrictModel):
-    """Keep inferred identity fields within the three allowed strings."""
+    """Keep model-extracted participant identity fields as strings."""
 
     nickname: str
     raw_region: str
+    normalized_region: str
     dream_or_job: str
 
 
@@ -111,11 +112,12 @@ class RevisedDemands(StrictModel):
 
 
 class SelfInfo(TypedDict):
-    """Keep backend-owned age and district fields beside model-extracted identity."""
+    """Keep backend-owned age fields beside validated model-extracted identity."""
 
     nickname: str
     birth_year: int
     age_2040: int
+    gender: str
     raw_region: str
     normalized_region: str
     region_table_version: str
@@ -207,6 +209,7 @@ async def generate_draft(current: session.Session, type_result: TypeResult) -> D
                 "type_result": type_result,
                 # Without the definitions the report has to guess what each letter means.
                 "axis_definitions": axes.load_definitions(),
+                "districts": regions.DISTRICTS,
             },
             ensure_ascii=False,
             separators=(",", ":"),
@@ -238,9 +241,10 @@ def assemble(
             "nickname": extracted.nickname,
             "birth_year": current["birth_year"],
             "age_2040": current["age_2040"],
+            "gender": current["gender"],
             "raw_region": extracted.raw_region,
-            "normalized_region": regions.normalize(extracted.raw_region),
-            "region_table_version": regions.ALIAS_TABLE_VERSION,
+            "normalized_region": regions.validate(extracted.normalized_region),
+            "region_table_version": regions.DISTRICT_TABLE_VERSION,
             "dream_or_job": extracted.dream_or_job,
         },
         "summary": list(draft.structured.summary),
