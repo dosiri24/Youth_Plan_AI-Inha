@@ -258,6 +258,9 @@ export default function Dashboard() {
             <span className={styles.sw} />
             AI 분석모드
           </label>
+          <Link className={`${styles.btn} ${styles.g}`} href="/admin/report">
+            종합 브리핑
+          </Link>
           <Link
             className={`${styles.btn} ${styles.g}`}
             href="/admin/submissions"

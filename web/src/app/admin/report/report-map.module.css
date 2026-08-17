@@ -1,0 +1,282 @@
+/* The cover map. The district faces stay one flat neutral: here the dots carry
+   the information, and the dashboard map is the one that shades by count. */
+
+.wrap {
+  /* Centred and held: the map is the fixed thing on this cover and only the
+     words over it change, the way the reference globe stayed put. */
+  /* The stage owns the size; this only fills whatever it is given. */
+  width: 100%;
+  margin: 0 auto;
+  --map-fallback: min(680px, 66vh);
+}
+
+/* While the quotes scroll over it the map steps back, and only the district
+   being spoken about keeps full strength. The reference did the same by leaving
+   every other country's dots dark behind the highlighted one. */
+.quiet .name {
+  opacity: 0.45;
+}
+.quiet .dot {
+  opacity: 0.38;
+}
+.quiet .near,
+.quiet .lit,
+.quiet .picked {
+  opacity: 1;
+}
+
+/* Measured only. Clipped to a pixel instead of hidden, because display:none
+   would stop the browser from rendering the shapes at all. */
+.probe {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sea {
+  position: relative;
+  width: 100%;
+  /* Both dimensions from one length, so nothing waits on aspect-ratio. */
+  height: calc(var(--mapw, var(--map-fallback)) * var(--map-ratio));
+  /* Left-aligned like everything else on the page; the cover grid sets the width. */
+  max-width: 100%;
+  /* The dashboard's sea sits inside a white card, so its #e8eef4 reads as water
+     against it. Here the ground is the grey page itself, which that tint is
+     almost equal to, so the sea takes the next step down the same ramp and the
+     panel has an edge again. */
+  background: #dde7f1;
+  border-radius: var(--r-radius-card);
+  overflow: hidden;
+}
+
+.map,
+.inset svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.land {
+  fill: var(--r-card);
+  stroke: var(--r-line);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  transition: fill 420ms var(--r-ease);
+}
+
+/* The district the current quote came from, the way the reference globe turned
+   to the country it was quoting. It has to clear both the white land and the pale
+   sea, so it takes the next step up the ramp rather than the sea's own tint. */
+.litland {
+  fill: var(--r-blue-pale);
+}
+
+/* Like an inset for a far-off island, this box takes the panel's left and bottom
+   edges as its own coastline. */
+.inset {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  /* Content-box so the width the component sets is the area the island is drawn
+     in, and the two coastline rules hang outside it. */
+  box-sizing: content-box;
+  border-top: 1px solid var(--r-line);
+  border-right: 1px solid var(--r-line);
+  background: #dde7f1;
+}
+
+.name,
+.insetName {
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* Names sit under the dots, so each one is knocked out of the land with a halo. */
+.name {
+  fill: var(--r-ink3);
+  stroke: var(--r-card);
+  stroke-width: 3;
+  paint-order: stroke;
+}
+
+.insetName {
+  position: absolute;
+  left: 7px;
+  top: 5px;
+  color: var(--r-ink3);
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+}
+
+.dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 1.5px solid var(--r-card);
+  border-radius: 50%;
+  background: var(--r-blue);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  transition:
+    width 0.12s,
+    height 0.12s,
+    box-shadow 0.12s,
+    opacity 420ms var(--r-ease),
+    background 420ms var(--r-ease);
+}
+
+/* While a quote is showing, the map recolours by that quote's axis so the reader
+   sees how the whole city split on the very question being spoken. Blue against
+   teal, the pairing the dashboard already uses for these same four axes: the
+   poles are equal preferences, so the two hues are equal in weight too. */
+.poleA {
+  background: var(--r-blue);
+}
+.poleB {
+  background: var(--r-teal);
+}
+
+.dot:hover,
+.dot:focus-visible {
+  width: 13px;
+  height: 13px;
+  box-shadow: 0 0 0 3px var(--r-blue-soft);
+  outline: none;
+  z-index: 2;
+}
+
+.picked {
+  width: 15px;
+  height: 15px;
+  box-shadow: 0 0 0 3px var(--r-blue);
+  z-index: 3;
+}
+
+/* The participant being quoted. The ring breathes so the eye finds them on a map
+   of three dozen identical dots. */
+.lit {
+  width: 13px;
+  height: 13px;
+  background: var(--r-blue-deep);
+  z-index: 2;
+  animation: beat 2s var(--r-ease-soft) infinite;
+}
+
+@keyframes beat {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(0 94 184 / 42%);
+  }
+  55% {
+    box-shadow: 0 0 0 9px rgb(0 94 184 / 0%);
+  }
+}
+
+.play {
+  animation: pop 260ms ease-out var(--d) backwards;
+}
+
+@keyframes pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+.tip {
+  position: absolute;
+  transform: translate(var(--tx), var(--ty));
+  max-width: 190px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: var(--r-ink);
+  color: var(--r-card);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.tip b {
+  display: block;
+  font-weight: 600;
+}
+
+.tip span {
+  color: var(--r-line);
+}
+
+.name {
+  transition: opacity 420ms var(--r-ease);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 16px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--r-ink2);
+}
+.legendaxis {
+  font-weight: 700;
+  color: var(--r-ink);
+}
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.key i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.keyA {
+  background: var(--r-blue);
+}
+.keyB {
+  background: var(--r-teal);
+}
+
+/* The legend counts every participant, including those whose axis was filled in
+   with its default pole for want of evidence. Section 05 counts only the ones
+   with evidence, so the two disagree unless this says which it is. */
+.legendnote {
+  color: var(--r-ink3);
+}
+
+.caption {
+  margin-top: 12px;
+  color: var(--r-ink3);
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+    transition: none;
+  }
+  .land {
+    transition: none;
+  }
+  /* Without the beat the spotlight still has to be findable, so it keeps a ring. */
+  .lit {
+    box-shadow: 0 0 0 4px var(--r-blue-soft);
+  }
+}

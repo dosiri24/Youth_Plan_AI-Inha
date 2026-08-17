@@ -38,6 +38,7 @@ class Session(TypedDict):
     gender: Literal["male", "female", "other"]
     messages: list[Message]
     evidence_log: list[Evidence]
+    axis_hints: dict[str, list[int]]
     malicious_count: int
     status: Literal["active", "ended", "result_ready", "submitted"]
     type_result: TypeResult | None
@@ -62,6 +63,7 @@ def create_session(
         "gender": gender,
         "messages": [],
         "evidence_log": [],
+        "axis_hints": {},
         "malicious_count": 0,
         "status": "active",
         "type_result": None,

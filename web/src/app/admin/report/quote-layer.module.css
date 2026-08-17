@@ -1,0 +1,296 @@
+/* The quote layer covers the briefing instead of dimming it: the officer is
+   browsing evidence here, and a see-through scrim would keep the page competing
+   for attention behind it. */
+
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  background: var(--r-bg);
+  color: var(--r-ink);
+  animation: layerin 260ms var(--r-ease) backwards;
+}
+
+.layer:focus {
+  outline: none;
+}
+
+/* The layer arrives rather than replacing the page in one frame, so the reader
+   can tell they moved into it and not somewhere else. */
+@keyframes layerin {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 24px 32px 16px;
+  border-bottom: 1px solid var(--r-line);
+}
+
+.headtext {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.028em;
+  line-height: 1.3;
+}
+
+.sub {
+  margin: 6px 0 0;
+  max-width: var(--r-read);
+  color: var(--r-ink2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* The dashboard's quiet button. */
+.close {
+  display: inline-flex;
+  align-items: center;
+  height: 37px;
+  padding: 0 20px;
+  border-radius: var(--r-radius-control);
+  background: var(--r-line2);
+  color: var(--r-ink2);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  transition:
+    background var(--r-quick) var(--r-ease),
+    color var(--r-quick) var(--r-ease);
+}
+
+.close:hover {
+  background: var(--r-line);
+  color: var(--r-ink);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 14px 32px;
+  border-bottom: 1px solid var(--r-line);
+}
+
+/* The dashboard's segmented control: a tinted trough with square corners. */
+.modes {
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--r-line2);
+}
+
+.mode {
+  position: relative;
+}
+
+.mode span {
+  display: block;
+  padding: 6px 14px;
+  border-radius: 4px;
+  color: var(--r-ink3);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background var(--r-quick) var(--r-ease),
+    color var(--r-quick) var(--r-ease);
+}
+
+.mode:hover input:not(:checked) + span {
+  color: var(--r-ink);
+}
+
+.mode input:checked + span {
+  background: var(--r-card);
+  color: var(--r-blue);
+  box-shadow: 0 1px 2px rgb(22 24 26 / 14%);
+}
+
+.mode input:focus-visible + span {
+  outline: 2px solid var(--r-blue);
+  outline-offset: 2px;
+}
+
+.search {
+  flex: 1;
+  min-width: 220px;
+  max-width: 360px;
+}
+
+.input {
+  width: 100%;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--r-line);
+  border-radius: var(--r-radius-control);
+  background: var(--r-card);
+  color: var(--r-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.input:focus-visible {
+  border-color: var(--r-blue);
+  outline: 2px solid var(--r-blue-soft);
+}
+
+.count {
+  margin: 0;
+  color: var(--r-ink3);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.body {
+  overflow-y: auto;
+  padding: 24px 32px 64px;
+}
+
+.empty {
+  max-width: var(--r-read);
+  margin: 48px auto;
+  color: var(--r-ink2);
+  font-size: 14px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.section {
+  margin-bottom: 36px;
+}
+
+.grouphead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--r-line);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.grouphead span {
+  color: var(--r-ink3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+/* Grid items stretch to the tallest card in their row, so the meta line has to
+   be pushed to the foot; left in normal flow it floated mid-card with the
+   leftover height showing as a hole underneath it. */
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: 15px 17px;
+  border-radius: var(--r-radius-card);
+  background: var(--r-card);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    box-shadow var(--r-quick) var(--r-ease),
+    transform var(--r-quick) var(--r-ease);
+}
+
+.card:focus-visible {
+  outline: none;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgb(22 24 26 / 9%);
+}
+
+.card:focus-visible {
+  box-shadow: 0 0 0 3px var(--r-blue-soft);
+}
+
+.text {
+  margin: 0;
+  font-family: var(--r-serif);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.demand {
+  margin: 10px 0 12px;
+  color: var(--r-ink2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 12px;
+  color: var(--r-ink3);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.axis {
+  font-weight: 700;
+}
+
+.badge {
+  padding: 2px 7px;
+  border-radius: var(--r-radius-control);
+  background: var(--r-blue-pale);
+  color: var(--r-blue);
+  font-weight: 700;
+}
+
+/* The quote number is how an officer walks the evidence back to a submission. */
+.qid {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layer {
+    animation: none;
+  }
+  .card:hover {
+    transform: none;
+  }
+}

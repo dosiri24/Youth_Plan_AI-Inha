@@ -495,6 +495,47 @@ export type DashboardPerson = {
 
 export type AiNoteCard = "map" | "topics" | "axes" | "cross" | "types";
 
+/** The four data sections of the briefing. The cover map carries no lead or read. */
+export type BriefingSectionKey = "topics" | "axes" | "cross" | "types";
+
+export type BriefingFinding = { title: string; body: string };
+
+export type BriefingTension = {
+  title: string;
+  body: string;
+  left_label: string;
+  right_label: string;
+  left_quotes: RepresentativeQuote[];
+  right_quotes: RepresentativeQuote[];
+};
+
+export type BriefingImplication = { topic: string; question: string };
+
+export type Briefing = {
+  headline: string;
+  findings: BriefingFinding[];
+  /** What this particular sample was actually like, written from run metadata. */
+  sample: string;
+  leads: Record<BriefingSectionKey, string>;
+  reads: Record<BriefingSectionKey, string>;
+  tensions: BriefingTension[];
+  implications: BriefingImplication[];
+};
+
+export type BriefingQuote = {
+  quote_id: string;
+  submission_id: string;
+  axis: AxisName;
+  letter: AxisLetter;
+  topics: string[];
+  /** Empty when the interview never resolved one of the eleven districts. */
+  region: string;
+  /** Empty when the participant falls outside the four youth age bands. */
+  age_band: string;
+  demand_title: string;
+  text: string;
+};
+
 export type AnalysisRun = {
   run_id: string;
   executed_at: string;
@@ -513,6 +554,9 @@ export type AnalysisRun = {
   cross?: Record<string, number[]>;
   people?: DashboardPerson[];
   ai_notes?: Partial<Record<AiNoteCard, string>>;
+  /** Absent on runs from before the briefing, and null when its one call failed. */
+  briefing?: Briefing | null;
+  quotes?: BriefingQuote[];
 };
 
 /** The admin table reads store summaries without loading full transcripts. */

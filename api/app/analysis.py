@@ -9,7 +9,7 @@ from google.genai import types
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app import gemini, regions, scoring, store
-from app.axes import AXIS_NAMES, DISPLAY_AXES, SCORING_AXES
+from app.axes import AXIS_NAMES, DISPLAY_AXES, POLE_NAMES, SCORING_AXES
 from app.config import get_settings
 from app.logging import log_event
 from app.prompts import load_report_prompt as load_prompt
@@ -19,9 +19,12 @@ PoleName = Literal[*tuple(pole for _axis, poles, _default in SCORING_AXES for po
 Sentence = Annotated[str, Field(min_length=1)]
 TokenUsage = dict[str, int] | None
 CandidateTable = dict[str, dict[str, dict[str, str]]]
+BriefingCandidateTable = dict[str, dict[str, str]]
 
 AGE_BANDS = (("19~24", 19, 24), ("25~29", 25, 29), ("30~34", 30, 34), ("35~39", 35, 39))
 TOPICS = ("일자리", "주거", "교통", "문화", "환경", "돌봄", "안전", "교육", "상권")
+QUOTE_CANDIDATES_PER_AXIS = 12
+QUOTE_CANDIDATES_TOTAL = 100
 
 
 class NoSubmissionsError(Exception):
@@ -102,15 +105,62 @@ class AggregateResponse(StrictModel):
         return self
 
 
-class InsightResponse(StrictModel):
-    """Accept exactly one interpretation string for each dashboard card."""
+class BriefingCards(StrictModel):
+    """Accept one interpretation string for each dashboard card."""
+
+    map: str
+    topics: str
+    axes: str
+    cross: str
+    types: str
+
+
+class BriefingSections(StrictModel):
+    """Accept the four narrative sections that surround briefing charts."""
+
+    topics: str
+    axes: str
+    cross: str
+    types: str
+
+
+class BriefingFinding(StrictModel):
+    """Accept one titled finding for the briefing overview."""
+
+    title: str
+    body: str
+
+
+class BriefingTension(StrictModel):
+    """Accept one conflicting demand pair and bounded candidate quote ids."""
+
+    title: str
+    body: str
+    left_label: str
+    right_label: str
+    left_quote_ids: Annotated[list[str], Field(max_length=2)]
+    right_quote_ids: Annotated[list[str], Field(max_length=2)]
+
+
+class BriefingImplication(StrictModel):
+    """Accept one model-selected planning topic and follow-up question."""
+
+    topic: str
+    question: str
+
+
+class BriefingResponse(StrictModel):
+    """Accept one complete dashboard-card and comprehensive briefing response."""
 
     # extra="forbid" would emit additionalProperties, which Gemini rejects as a response schema.
-    map: Sentence
-    topics: Sentence
-    axes: Sentence
-    cross: Sentence
-    types: Sentence
+    cards: BriefingCards
+    headline: str
+    findings: Annotated[list[BriefingFinding], Field(min_length=3, max_length=4)]
+    sample: str
+    leads: BriefingSections
+    reads: BriefingSections
+    tensions: Annotated[list[BriefingTension], Field(min_length=2, max_length=4)]
+    implications: Annotated[list[BriefingImplication], Field(min_length=3, max_length=5)]
 
 
 async def deidentify(document: store.Document) -> TokenUsage:
@@ -387,6 +437,91 @@ def _person(
     }
 
 
+def build_quotes(
+    documents: list[store.Document],
+    reference_year: int,
+) -> list[dict[str, object]]:
+    """Build the deterministic inventory of every de-identified demand quote."""
+    quotes = []
+    for document in documents:
+        if document["deidentified"] is None:
+            continue
+        age_index = _age_band_index(_age(document["self_info"], reference_year))
+        age_band = AGE_BANDS[age_index][0] if age_index is not None else ""
+        letters = {result["axis"]: result["letter"] for result in document["type_result"]["axes"]}
+        for axis in document["deidentified"]["axis_demands"]:
+            for demand in axis["demands"]:
+                for quote in demand["quotes"]:
+                    quotes.append(
+                        {
+                            "quote_id": quote["quote_id"],
+                            "submission_id": document["submission_id"],
+                            "axis": axis["axis"],
+                            "letter": letters[axis["axis"]],
+                            "topics": list(demand["topics"]),
+                            "region": document["self_info"]["normalized_region"],
+                            "age_band": age_band,
+                            "demand_title": demand["title"],
+                            "text": quote["text"],
+                        }
+                    )
+    quotes.sort(key=lambda item: (item["submission_id"], item["quote_id"]))
+    return quotes
+
+
+def sample_meta(documents: list[store.Document]) -> dict[str, object]:
+    """Summarize dialogue depth and evidence coverage for this analysis sample."""
+    turns = [document["report"]["meta"]["turn_count"] for document in documents]
+    empty_axis = {axis: 0 for axis in AXIS_NAMES}
+    single_pole = {axis: 0 for axis in AXIS_NAMES}
+    for document in documents:
+        results = {result["axis"]: result for result in document["type_result"]["axes"]}
+        for axis, poles, _default in SCORING_AXES:
+            result = results[axis]
+            if result["empty_axis"]:
+                empty_axis[axis] += 1
+            evidence = result["evidence"]
+            if evidence:
+                pole_counts = Counter(item["pole"] for item in evidence)
+                if any(pole_counts[pole] == 0 for pole in poles):
+                    single_pole[axis] += 1
+    return {
+        "deidentified_count": sum(document["deidentified"] is not None for document in documents),
+        "turn_mean": scoring.round_half_up(sum(turns) / len(turns)),
+        "turn_min": min(turns),
+        "turn_max": max(turns),
+        "empty_axis": empty_axis,
+        "single_pole": single_pole,
+    }
+
+
+def build_quote_candidates(quotes: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Bound briefing quote candidates while preserving inventory order."""
+    selected = []
+    axis_counts: Counter[str] = Counter()
+    for quote in quotes:
+        axis = quote["axis"]
+        if (
+            len(selected) >= QUOTE_CANDIDATES_TOTAL
+            or axis_counts[axis] >= QUOTE_CANDIDATES_PER_AXIS
+        ):
+            continue
+        selected.append(
+            {
+                "quote_id": quote["quote_id"],
+                "axis": axis,
+                "letter": quote["letter"],
+                "topics": list(quote["topics"]),
+                "text": quote["text"],
+            }
+        )
+        axis_counts[axis] += 1
+    dropped_count = len(quotes) - len(selected)
+    if dropped_count:
+        log_event("quote_candidates_truncated", dropped_count=dropped_count)
+    return selected
+
+
 def build_summary_input(
     documents: list[store.Document],
 ) -> tuple[dict[str, object], CandidateTable]:
@@ -468,6 +603,46 @@ def assemble_axis_summaries(
     return summaries
 
 
+def assemble_briefing(
+    value: object,
+    candidates: BriefingCandidateTable,
+) -> tuple[dict[str, str], dict[str, object]]:
+    """Separate dashboard cards and restore valid quote sources in the briefing."""
+    generated = BriefingResponse.model_validate(value)
+    tensions = []
+    for item in generated.tensions:
+        tensions.append(
+            {
+                "title": item.title,
+                "body": item.body,
+                "left_label": item.left_label,
+                "right_label": item.right_label,
+                "left_quotes": [
+                    dict(candidates[quote_id])
+                    for quote_id in item.left_quote_ids
+                    if quote_id in candidates
+                ],
+                "right_quotes": [
+                    dict(candidates[quote_id])
+                    for quote_id in item.right_quote_ids
+                    if quote_id in candidates
+                ],
+            }
+        )
+    briefing = {
+        "headline": generated.headline,
+        "findings": [item.model_dump() for item in generated.findings],
+        "sample": generated.sample,
+        "leads": generated.leads.model_dump(),
+        "reads": generated.reads.model_dump(),
+        "tensions": tensions,
+        "implications": [
+            item.model_dump() for item in generated.implications if item.topic in TOPICS
+        ],
+    }
+    return generated.cards.model_dump(), briefing
+
+
 async def execute() -> str:
     """Run de-identification, aggregation, summarization, and persistence once."""
     documents = store.get_store().list()
@@ -484,20 +659,57 @@ async def execute() -> str:
     distribution = type_distribution(documents)
     dashboard = dashboard_aggregates(documents, executed_at.year)
     displays = dict(DISPLAY_AXES)
-    notes, insight_usage = await _insight(
+    quotes = build_quotes(documents, executed_at.year)
+    quote_candidates = [
+        {
+            "quote_id": candidate["quote_id"],
+            "axis": candidate["axis"],
+            "letter": candidate["letter"],
+            "name": POLE_NAMES[candidate["letter"]],
+            "topics": candidate["topics"],
+            "text": candidate["text"],
+        }
+        for candidate in build_quote_candidates(quotes)
+    ]
+    candidate_ids = {candidate["quote_id"] for candidate in quote_candidates}
+    briefing_candidates = {
+        quote["quote_id"]: {
+            "quote_id": quote["quote_id"],
+            "submission_id": quote["submission_id"],
+            "text": quote["text"],
+        }
+        for quote in quotes
+        if quote["quote_id"] in candidate_ids
+    }
+    notes, briefing, briefing_usage = await _briefing(
         {
             "kpi": dashboard["kpi"],
             "ages": dashboard["ages"],
             "regions_count": dashboard["regions_count"],
             "topics": dashboard["topics"],
             "cross": dashboard["cross"],
-            # Letters alone are meaningless without demand text, so the axis name rides along.
+            # Shared names keep model prose aligned with labels shown by the client.
             "axis_stats": [
-                {"axis": stat["axis"], "display": displays[stat["axis"]], "poles": stat["poles"]}
+                {
+                    "axis": stat["axis"],
+                    "display": displays[stat["axis"]],
+                    "poles": [
+                        {
+                            "letter": pole["letter"],
+                            "name": POLE_NAMES[pole["letter"]],
+                            "count": pole["count"],
+                            "mean_strength": pole["mean_strength"],
+                        }
+                        for pole in stat["poles"]
+                    ],
+                }
                 for stat in stats
             ],
             "type_distribution": distribution,
-        }
+            "sample_meta": sample_meta(documents),
+            "quote_candidates": quote_candidates,
+        },
+        briefing_candidates,
     )
     run_document = {
         "executed_at": executed_at,
@@ -507,11 +719,13 @@ async def execute() -> str:
         "axis_summaries": summaries,
         **dashboard,
         "ai_notes": notes,
+        "briefing": briefing,
+        "quotes": quotes,
     }
     store.get_analysis_store().save(run_id, run_document)
     log_event(
         "analysis_run",
-        token_usage=_sum_token_usage([*usages, summary_usage, insight_usage]),
+        token_usage=_sum_token_usage([*usages, summary_usage, briefing_usage]),
         run_id=run_id,
         submission_count=len(documents),
         deidentified_count=sum(document["deidentified"] is not None for document in documents),
@@ -590,16 +804,17 @@ async def _summarize(
     )
 
 
-async def _insight(
+async def _briefing(
     payload: dict[str, object],
-) -> tuple[dict[str, str], TokenUsage]:
-    """Generate all five dashboard interpretations without exposing participant data."""
+    candidates: BriefingCandidateTable,
+) -> tuple[dict[str, str], dict[str, object] | None, TokenUsage]:
+    """Generate dashboard interpretations and the comprehensive briefing once."""
     usage: TokenUsage = None
     try:
         config = types.GenerateContentConfig(
-            system_instruction=load_prompt("insight.md"),
+            system_instruction=load_prompt("briefing.md"),
             response_mime_type="application/json",
-            response_schema=InsightResponse,
+            response_schema=BriefingResponse,
         )
         response = await gemini.get_client().aio.models.generate_content(
             model=get_settings().gemini_model,
@@ -607,15 +822,15 @@ async def _insight(
             config=config,
         )
         usage = gemini.token_usage(response.usage_metadata)
-        generated = InsightResponse.model_validate(json.loads(response.text))
-        return generated.model_dump(), usage
+        notes, briefing = assemble_briefing(json.loads(response.text), candidates)
+        return notes, briefing, usage
     except Exception as error:
         log_event(
-            "insight_failed",
+            "briefing_failed",
             token_usage=usage,
             reason=type(error).__name__,
         )
-        return {}, usage
+        return {}, None, usage
 
 
 def _sum_token_usage(usages: list[TokenUsage]) -> TokenUsage:

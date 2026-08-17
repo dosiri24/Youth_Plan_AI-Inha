@@ -5,7 +5,7 @@ from contextlib import suppress
 
 from google.genai import types
 
-from app import gemini, knowledge, prompts, session, tagging
+from app import claude, gemini, knowledge, prompts, session, tagging
 from app.axes import Evidence
 from app.config import Settings, get_settings
 from app.lexicon import (
@@ -39,30 +39,26 @@ async def _run(
     turn: int,
     user_text: str | None,
 ) -> AsyncIterator[str]:
-    """Execute one Gemini turn and emit participant-safe SSE events."""
+    """Execute one interview turn and emit participant-safe SSE events."""
     settings = get_settings()
+    hint_topic = _axis_hint(current, turn, settings) if user_text is not None else None
     scoring_task = _start_scoring(current, user_text, turn)
     try:
-        contents = _build_contents(current, user_text, turn)
-        tool = knowledge.file_search_tool()
-        config = types.GenerateContentConfig(
-            system_instruction=prompts.build_fixed_prefix(current["age_2040"]),
-            tools=[tool] if tool is not None else None,
-        )
-        stream = await gemini.get_client().aio.models.generate_content_stream(
-            model=settings.gemini_model,
-            contents=contents,
-            config=config,
-        )
         parser = TrailerParser()
         visible_parts: list[str] = []
         token_usage: dict[str, int] | None = None
 
-        async for chunk in stream:
-            if chunk.usage_metadata is not None:
-                token_usage = gemini.token_usage(chunk.usage_metadata)
-            if chunk.text:
-                safe_text = parser.feed(chunk.text)
+        async for text, current_usage in _text_stream(
+            current,
+            user_text,
+            turn,
+            settings,
+            hint_topic,
+        ):
+            if current_usage is not None:
+                token_usage = current_usage
+            if text:
+                safe_text = parser.feed(text)
                 if safe_text:
                     visible_parts.append(safe_text)
                     yield _sse("delta", {"text": safe_text})
@@ -133,10 +129,157 @@ async def _run(
             scoring_task.cancel()
 
 
+def _axis_hint(current: session.Session, turn: int, settings: Settings) -> str | None:
+    """Select the next uncovered axis topic for hint or closing guidance."""
+    closing = turn >= settings.interview_wrapup_turn
+    if not closing and turn < settings.interview_hint_turn:
+        return None
+
+    covered = {item["axis"] for item in current["evidence_log"]}
+    for axis in ("AC", "UN", "OW", "FH"):
+        if axis in covered:
+            continue
+        if closing:
+            log_event(
+                "axis_hint",
+                session_id=current["session_id"],
+                turn=turn,
+                axis=axis,
+                closing=True,
+            )
+            return prompts.AXIS_HINT_TOPICS[axis]
+
+        attempts = current["axis_hints"].get(axis, [])
+        if len(attempts) >= 2:
+            continue
+        # Tagging sees the prompted answer next turn, so wait before retrying.
+        if attempts and attempts[-1] > turn - 2:
+            continue
+        attempts.append(turn)
+        current["axis_hints"][axis] = attempts
+        log_event(
+            "axis_hint",
+            session_id=current["session_id"],
+            turn=turn,
+            axis=axis,
+            attempt=len(attempts),
+        )
+        return prompts.AXIS_HINT_TOPICS[axis]
+    return None
+
+
+def _text_stream(
+    current: session.Session,
+    user_text: str | None,
+    turn: int,
+    settings: Settings,
+    hint_topic: str | None,
+) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
+    """Select the configured interviewer text stream."""
+    if settings.interview_provider == "claude":
+        return _claude_text_stream(current, user_text, turn, settings, hint_topic)
+    return _gemini_text_stream(current, user_text, turn, settings, hint_topic)
+
+
+async def _gemini_text_stream(
+    current: session.Session,
+    user_text: str | None,
+    turn: int,
+    settings: Settings,
+    hint_topic: str | None,
+) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
+    """Yield Gemini interviewer text and usage updates."""
+    contents = _build_contents(current, user_text, turn, hint_topic)
+    tool = knowledge.file_search_tool()
+    config = types.GenerateContentConfig(
+        system_instruction=prompts.build_fixed_prefix(current["age_2040"]),
+        tools=[tool] if tool is not None else None,
+    )
+    stream = await gemini.get_client().aio.models.generate_content_stream(
+        model=settings.gemini_model,
+        contents=contents,
+        config=config,
+    )
+    async for chunk in stream:
+        usage = (
+            gemini.token_usage(chunk.usage_metadata)
+            if chunk.usage_metadata is not None
+            else None
+        )
+        yield chunk.text or "", usage
+
+
+async def _claude_text_stream(
+    current: session.Session,
+    user_text: str | None,
+    turn: int,
+    settings: Settings,
+    hint_topic: str | None,
+) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
+    """Yield Claude interviewer text and final usage."""
+    if settings.file_search_store_name:
+        log_event("file_search_skipped", session_id=current["session_id"])
+    async with claude.get_client().messages.stream(
+        model=settings.claude_model,
+        max_tokens=4096,
+        thinking=_claude_thinking(settings.claude_model),
+        system=[
+            {
+                "type": "text",
+                "text": prompts.build_fixed_prefix(current["age_2040"]),
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
+        messages=_build_claude_messages(current, user_text, turn, settings, hint_topic),
+    ) as stream:
+        async for text in stream.text_stream:
+            yield text, None
+        final = await stream.get_final_message()
+        yield "", claude.token_usage(final.usage)
+
+
+def _claude_thinking(model: str) -> dict[str, str | int]:
+    """Pick the thinking form each Claude generation accepts."""
+    # Haiku 4.5 predates adaptive thinking and rejects it, while 4.6+ models reject budget_tokens.
+    if "haiku-4-5" in model:
+        return {"type": "enabled", "budget_tokens": 2048}
+    return {"type": "adaptive"}
+
+
+def _build_claude_messages(
+    current: session.Session,
+    user_text: str | None,
+    turn: int,
+    settings: Settings,
+    hint_topic: str | None = None,
+) -> list[dict[str, str]]:
+    """Build text-only Claude messages with the current instruction last."""
+    messages = [
+        {
+            "role": "user" if message["role"] == "user" else "assistant",
+            "content": message["text"],
+        }
+        for message in current["messages"]
+    ]
+    text = (
+        prompts.build_opening_instruction()
+        if user_text is None
+        else prompts.append_operational_instruction(
+            user_text,
+            turn,
+            settings.interview_wrapup_turn,
+            hint_topic,
+        )
+    )
+    messages.append({"role": "user", "content": text})
+    return messages
+
+
 def _build_contents(
     current: session.Session,
     user_text: str | None,
     turn: int,
+    hint_topic: str | None = None,
 ) -> list[types.Content]:
     """Build full conversation contents with the current utterance and its instruction last."""
     contents = [
@@ -154,6 +297,7 @@ def _build_contents(
         user_text,
         turn,
         settings.interview_wrapup_turn,
+        hint_topic,
     )
     contents.append(_content("user", assembled))
     return contents

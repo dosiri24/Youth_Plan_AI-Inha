@@ -1,0 +1,1150 @@
+/* The briefing is a document, not the dashboard's fixed stage. It scrolls on its
+   own because the global body sets overflow: hidden for the participant flow. */
+
+.root {
+  height: 100dvh;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  background: var(--r-bg);
+  color: var(--r-ink);
+  font-size: var(--r-body);
+  line-height: 1.65;
+  letter-spacing: -0.005em;
+  /* Figures are compared down columns all over this page, so digits keep one width. */
+  font-variant-numeric: tabular-nums;
+}
+
+.root main {
+  padding-bottom: 72px;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 3;
+  padding: 11px 18px;
+  background: var(--r-blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 0 0 var(--r-radius-control) 0;
+}
+.skip:focus {
+  left: 0;
+}
+
+.hold {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 32px;
+  text-align: center;
+  color: var(--r-ink2);
+}
+
+/* ---- One reading spine -------------------------------------------------- */
+
+/* Prose and data share one centre line: a narrow reading column with charts
+   breaking out wider around it, the way the reference article reads.
+   Prose inside a wide block is centred on that same line rather than hung on the
+   block's left edge, and it takes --r-measure so it lands on the reading
+   column to the pixel. The earlier version used a third width here, which put a
+   chart's title 138px inboard of its own chart on an axis shared with nothing. */
+.read,
+.wide {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: var(--r-gutter);
+}
+.read {
+  max-width: var(--r-read);
+}
+.wide {
+  max-width: var(--r-wide);
+}
+.wide > .wideh3,
+.wide > .caption,
+.wide > .serif,
+.wide > .missing,
+.tension > h3,
+.tension > .serif,
+.axishead {
+  max-width: var(--r-measure);
+  margin-inline: auto;
+}
+
+.section {
+  padding-block: 60px;
+}
+.section > .wide,
+.section > .read {
+  margin-block: 26px;
+}
+.section > .wide:first-child,
+.section > .read:first-child {
+  margin-top: 0;
+}
+/* Crossing between the two columns moves the left edge as well as the block, so
+   it needs more air than two blocks that stay on the same edge. */
+.section > .wide + .read,
+.section > .read + .wide {
+  margin-top: 44px;
+}
+
+/* ---- Reveal ------------------------------------------------------------- */
+
+/* Blocks rise once, when their section is first reached. The layout is already
+   correct without this; it only paces the reading. */
+.section > .read,
+.section > .wide {
+  opacity: 0;
+  transform: translateY(18px);
+}
+.seen > .read,
+.seen > .wide {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--r-reveal) var(--r-ease),
+    transform var(--r-reveal) var(--r-ease);
+}
+.seen > *:nth-child(2) {
+  transition-delay: 100ms;
+}
+.seen > *:nth-child(3) {
+  transition-delay: 190ms;
+}
+.seen > *:nth-child(4) {
+  transition-delay: 260ms;
+}
+.seen > *:nth-child(n + 5) {
+  transition-delay: 320ms;
+}
+
+/* ---- Headings ----------------------------------------------------------- */
+
+/* Sections are told apart by air and a numbered eyebrow, not by cards. Weight
+   and tracking follow the dashboard's card headings. */
+.head {
+  margin-bottom: 26px;
+}
+.num {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: var(--r-blue);
+}
+.head h2 {
+  margin-top: 7px;
+  font-size: var(--r-h2);
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: -0.028em;
+  text-wrap: balance;
+}
+
+/* Wide enough to hang the number in the margin, which lets the heading itself
+   start on the same line as every paragraph below it. */
+@media (min-width: 1240px) {
+  .head {
+    position: relative;
+  }
+  .num {
+    position: absolute;
+    left: -68px;
+    top: 12px;
+    margin: 0;
+  }
+  .head h2 {
+    margin-top: 0;
+  }
+}
+
+.root h1 {
+  font-size: var(--r-display);
+  line-height: 1.16;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.root h3,
+.wideh3 {
+  font-size: var(--r-h3);
+  line-height: 1.45;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.root h4 {
+  font-size: var(--r-h4);
+  line-height: 1.5;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.wideh3 {
+  margin-bottom: 16px;
+}
+
+/* A second block in one wide column would otherwise start right under the caption
+   of the first. The opening heading needs nothing: the section already spaces it. */
+.wide > .wideh3:not(:first-child) {
+  margin-top: 46px;
+}
+
+/* ---- Prose -------------------------------------------------------------- */
+
+/* Narrative, quotes and the cover sentence are serif; every heading, number and
+   control stays sans. Korean serif needs more leading than a Latin face to stay
+   readable at this measure. */
+.serif,
+.aibody,
+.headline,
+.fixed p,
+.axdef p,
+.quote blockquote {
+  font-family: var(--r-serif);
+  font-size: var(--r-prose);
+  line-height: 1.82;
+  letter-spacing: 0;
+  word-break: keep-all;
+}
+.serif + .serif {
+  margin-top: 14px;
+}
+.aibody p + p {
+  margin-top: 14px;
+}
+
+.headline {
+  font-size: var(--r-lede);
+  line-height: 1.62;
+  letter-spacing: -0.015em;
+  color: var(--r-ink);
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: var(--r-blue);
+  margin-bottom: 13px;
+}
+.sub {
+  margin-top: 16px;
+  font-size: 16px;
+  color: var(--r-ink2);
+}
+.stamp {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--r-ink3);
+}
+
+.caption {
+  margin-top: 16px;
+  font-size: var(--r-small);
+  line-height: 1.75;
+  color: var(--r-ink2);
+  word-break: keep-all;
+}
+
+/* A run whose one Gemini call failed leaves the narrative slots visibly empty. */
+.missing {
+  margin-top: 10px;
+  padding: 12px 15px;
+  border-radius: var(--r-radius-control);
+  background: var(--r-soft);
+  box-shadow: inset 3px 0 0 var(--r-line);
+  font-size: 12.5px;
+  color: var(--r-ink2);
+}
+.notice {
+  padding: 14px 17px;
+  border-radius: var(--r-radius-inner);
+  background: var(--r-note);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--r-note-ink);
+}
+
+/* AI-written text is marked wherever it appears, so the fixed layer of the
+   method section can never be mistaken for it. */
+.ai {
+  margin-top: 14px;
+}
+/* Square chips, at the dashboard's radius: it uses no pills anywhere. */
+.aitag,
+.layertag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-bottom: 10px;
+  padding: 0 9px;
+  border-radius: var(--r-radius-control);
+  font-size: var(--r-micro);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.aitag {
+  background: var(--r-blue-pale);
+  color: var(--r-blue);
+}
+.layertag {
+  background: var(--r-line2);
+  color: var(--r-ink2);
+}
+.aibody b {
+  font-weight: 600;
+  /* The serif has no 700, so emphasis is carried by a tint as well as weight. */
+  color: var(--r-blue-deep);
+}
+
+/* ---- Cover -------------------------------------------------------------- */
+
+/* The dashboard's summary strip, read down instead of across: one white surface
+   divided by hairlines, not four floating cards. */
+.figures {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--r-line);
+  border-radius: var(--r-radius-card);
+  overflow: hidden;
+  margin-bottom: 36px;
+}
+.figures > div {
+  background: var(--r-card);
+  padding: 18px 20px 19px;
+}
+.figures dt {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--r-ink3);
+}
+.figures dd {
+  margin-top: 7px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+/* ---- The cover sequence ------------------------------------------------- */
+
+/* The map holds its place while the quotes scroll through it. The stage sticks
+   for as long as the steps beside it last, which is what makes the map read as
+   the fixed thing and the words as the moving one. */
+.scrolly {
+  position: relative;
+}
+.stage {
+  /* One length drives both map dimensions. Leaving the height to aspect-ratio
+     inside a flex column let the map settle late and visibly resize when the
+     quote changed; a computed height cannot do that. */
+  --mapw: min(680px, 66vh, calc(100vw - var(--r-gutter) * 2));
+
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-inline: var(--r-gutter);
+  z-index: 0;
+}
+
+/* Pulled back over the sticky stage so the steps pass across the map rather
+   than after it. Only the text itself takes the pointer, or the dots under it
+   would stop answering. */
+/* Empty spacers. They set how long the sequence lasts and tell the observer
+   which quote is current; the stage above draws everything. */
+.steps {
+  position: relative;
+  margin-top: -100dvh;
+  z-index: 1;
+  pointer-events: none;
+}
+/* No snap alignment here, and none on the scroller either. Centring the first
+   step put a snap position 289px down the page, so the document opened on the
+   map with its own title already scrolled off the top — and because the top of
+   the document was not itself a snap position, scrolling back up was pulled
+   straight back down. Holding a gesture to one district is the scroll handler's
+   job in report-voices.tsx, and it was already doing it; the snap was a second
+   mechanism for the same thing and this is what it cost. */
+.step {
+  min-height: 76dvh;
+}
+/* Tail so the last quote holds the middle for a beat before the stage releases. */
+.steps::after {
+  content: "";
+  display: block;
+  height: 34dvh;
+}
+
+/* The quote sits on the map and holds the middle of the stage. Only its own
+   controls take the pointer, or it would swallow every dot underneath. */
+/* A plain block, not a flex item: the map's width has to be definite before its
+   height is computed from it. */
+.stageinner {
+  position: relative;
+  width: var(--mapw);
+  margin-inline: auto;
+}
+/* On its own the sentence sat straight on the map: district names read through
+   it, dots surfaced between the lines, and the halo that was meant to clear a
+   field for the glyphs smeared white over the sea. It gets a plate instead —
+   the same white card the rest of the document is built from, laid over the
+   map. Narrower than the map, so the coastline still shows on both sides. */
+.voicelayer {
+  position: absolute;
+  left: 50%;
+  top: 47%;
+  transform: translate(-50%, -50%);
+  width: min(500px, 86%);
+  padding: 22px 26px 18px;
+  border-radius: var(--r-radius-card);
+  background: var(--r-card);
+  box-shadow: 0 6px 28px rgb(22 24 26 / 12%);
+  text-align: center;
+  pointer-events: none;
+  animation: voicein 460ms var(--r-ease) backwards;
+}
+.voicelayer a,
+.voicelayer .qid {
+  pointer-events: auto;
+}
+
+@keyframes voicein {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 12px));
+  }
+}
+
+/* The speaker is marked the way the reference marked its country name. */
+.voicemeta {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--r-radius-control);
+  background: var(--r-blue-pale);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--r-blue);
+}
+/* No halo any more: the plate behind it is opaque, so the glyphs sit on a clean
+   field and can be a normal weight of ink. */
+.voicetext {
+  margin-top: 14px;
+  font-family: var(--r-serif);
+  font-size: 21px;
+  line-height: 1.6;
+  letter-spacing: -0.015em;
+  word-break: keep-all;
+}
+
+/* The caret is the tell that the sentence is still arriving. */
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 0.95em;
+  margin-left: 1px;
+  vertical-align: -0.12em;
+  background: var(--r-ink);
+  animation: blink 1s steps(1, end) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.voicefoot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--r-line2);
+  font-size: 12px;
+}
+.voicefoot a {
+  color: var(--r-blue);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Pinned to the stage rather than stacked in it, so the scrolling quote passes
+   over the map itself and never has to share a line with fixed furniture. */
+.pickstrip {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 13px;
+  border-radius: var(--r-radius-control);
+  background: var(--r-card);
+  box-shadow: 0 1px 3px rgb(22 24 26 / 10%);
+  font-size: 12.5px;
+  color: var(--r-ink2);
+}
+.pickstrip b {
+  font-weight: 700;
+  color: var(--r-ink);
+}
+.pickstrip button {
+  color: var(--r-blue);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* The reference gave its intro a way out, and a sequence this long needs one. */
+/* Placed before the map in the DOM as well as pinned below it, so a keyboard
+   reader meets the way out first instead of after all three dozen dots. */
+.skipseq {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 15px;
+  border-radius: var(--r-radius-control);
+  border: 1px solid var(--r-line);
+  background: var(--r-card);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--r-ink2);
+  transition:
+    background var(--r-quick) var(--r-ease),
+    color var(--r-quick) var(--r-ease);
+}
+.skipseq:hover {
+  background: var(--r-tint);
+  color: var(--r-ink);
+}
+
+/* Announced to a screen reader while the typed copy stays decorative. */
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- Findings ----------------------------------------------------------- */
+
+.findings {
+  counter-reset: finding;
+}
+.findings li {
+  counter-increment: finding;
+  padding-top: 28px;
+  margin-top: 28px;
+  border-top: 1px solid var(--r-line);
+}
+.findings li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.findings h3::before {
+  content: counter(finding) ". ";
+  color: var(--r-blue);
+  font-variant-numeric: tabular-nums;
+}
+.findings .serif {
+  margin-top: 12px;
+}
+
+/* ---- Method ------------------------------------------------------------- */
+
+/* The two layers of the method section have to look different, because one is a
+   fixed fact and the other is written again on every run. Borderless white on
+   the grey ground, the way every dashboard card is separated. */
+.fixed,
+.axdef {
+  background: var(--r-card);
+  border-radius: var(--r-radius-card);
+}
+.fixed {
+  padding: 24px 26px 26px;
+}
+.fixed h3 {
+  margin-top: 24px;
+}
+.fixed p {
+  margin-top: 9px;
+}
+
+.axdefs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.axdef {
+  padding: 20px 22px;
+}
+.axdef p {
+  margin-top: 11px;
+  font-size: 14.5px;
+  line-height: 1.78;
+}
+.poledef {
+  color: var(--r-ink2);
+}
+/* Each pole takes the colour its own bar takes in the charts below. The two are
+   told apart by adjacency rather than nth-of-type, which would count the
+   measures paragraph above them and hand each pole the other's colour. */
+.poledef b {
+  color: var(--r-blue);
+  font-weight: 700;
+}
+.poledef + .poledef b {
+  color: var(--r-teal-ink);
+}
+
+/* ---- Ranked bars -------------------------------------------------------- */
+
+/* Their width is relative to the chart maximum, which every chart caption says
+   out loud. They grow from zero the first time the section is reached. */
+/* One white surface split by hairlines, like the dashboard's section list, so
+   nine rows read as one table and not as nine cards. */
+.rows {
+  background: var(--r-card);
+  border-radius: var(--r-radius-card);
+  padding: 6px;
+  overflow: hidden;
+}
+.rows > li + li {
+  border-top: 1px solid var(--r-line2);
+}
+.row {
+  width: 100%;
+  display: grid;
+  /* Fixed tracks, because each row is its own grid and only fixed widths line
+     the three columns up down the list. The label column is wide enough for the
+     longest city-type name at two lines rather than three. */
+  grid-template-columns: 196px minmax(120px, 1fr) 156px;
+  align-items: center;
+  gap: 18px;
+  padding: 13px 12px;
+  border-radius: var(--r-radius-inner);
+  text-align: left;
+  color: inherit;
+  transition: background var(--r-quick) var(--r-ease);
+}
+/* The type list carries a bare headcount where the others carry a sentence, so
+   its number column is sized for "36명" instead of leaving 100px of nothing. */
+.rowslim {
+  grid-template-columns: 196px minmax(120px, 1fr) 68px;
+}
+button.row {
+  cursor: pointer;
+}
+button.row:hover {
+  background: var(--r-tint);
+}
+button.row[aria-expanded="true"] {
+  background: var(--r-blue-pale);
+}
+.rowlabel {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  /* Without this Korean breaks mid-word: "성장도 / 시", "텃 / 밭도시". */
+  word-break: keep-all;
+}
+.rowlabel em {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--r-micro);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--r-ink3);
+  word-break: keep-all;
+}
+.track {
+  display: block;
+  height: 22px;
+  border-radius: var(--r-radius-bar);
+  background: var(--r-line2);
+  overflow: hidden;
+}
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-radius-bar);
+  background: var(--r-blue);
+  transition: width var(--r-grow) var(--r-ease-soft)
+    calc(var(--i, 0) * var(--r-step));
+}
+.rownum {
+  font-size: var(--r-small);
+  color: var(--r-ink3);
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+.rownum b {
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--r-ink);
+}
+
+/* Grid rows animate between 0fr and 1fr, which is what lets the panel open to
+   whatever its content happens to be tall. */
+.panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--r-quick) var(--r-ease);
+}
+.panel > div {
+  overflow: hidden;
+}
+.panel[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+.panel[data-open="false"] {
+  visibility: hidden;
+  transition:
+    grid-template-rows var(--r-quick) var(--r-ease),
+    visibility 0s linear var(--r-quick);
+}
+/* Hangs the opened quote under the bar rather than under the label, so the row
+   it belongs to is still readable above it. Matches the grid's first track
+   plus its gap. */
+.panel > div > * {
+  margin-left: 226px;
+  margin-right: 12px;
+  padding-bottom: 16px;
+}
+
+/* ---- Mirrored axis bars ------------------------------------------------- */
+
+/* Both poles are equal preferences, so they are told apart by hue rather than
+   by good against bad — the dashboard's own blue-against-teal pairing for the
+   same four axes. Lightness alone had left the second pole at 1.18:1 against
+   its track, which made the end of the bar impossible to find. */
+.axis {
+  padding: 26px;
+  background: var(--r-card);
+  border-radius: var(--r-radius-card);
+}
+.axis + .axis {
+  margin-top: 14px;
+}
+.axishead p {
+  margin-top: 5px;
+  font-size: 13px;
+  color: var(--r-ink2);
+}
+.axishead span {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--r-ink3);
+}
+.mirror {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.side {
+  min-width: 0;
+}
+/* Labels sit at the outer edges while the two fills meet in the middle. Pushing
+   both labels toward the centre line instead makes them collide, and then it is
+   not obvious which name belongs to which bar. */
+.sideL {
+  text-align: left;
+}
+.sideR {
+  text-align: right;
+}
+.polename {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+.sideL .polename {
+  color: var(--r-blue);
+}
+.sideR .polename {
+  color: var(--r-teal-ink);
+}
+.polenum {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--r-small);
+  font-weight: 600;
+  color: var(--r-ink3);
+}
+.mtrack {
+  display: flex;
+  margin-top: 10px;
+  height: 26px;
+  background: var(--r-line2);
+  border-radius: var(--r-radius-bar);
+}
+.sideL .mtrack {
+  justify-content: flex-end;
+}
+.mfillL,
+.mfillR {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-radius-bar);
+  transition: width var(--r-grow) var(--r-ease-soft)
+    calc(var(--i, 0) * var(--r-step));
+}
+.mfillL {
+  background: var(--r-blue);
+}
+.mfillR {
+  background: var(--r-teal);
+}
+
+.poles {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.poles h4 {
+  margin-bottom: 9px;
+}
+.poles > div:first-child h4 {
+  color: var(--r-blue);
+}
+.poles > div:last-child h4 {
+  color: var(--r-teal-ink);
+}
+.poles .serif {
+  font-size: 14.5px;
+  line-height: 1.78;
+}
+.axquotes {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* ---- Quotes ------------------------------------------------------------- */
+
+/* The dashboard sets a quote on a tinted panel with no border; so does this. */
+.quote {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+  padding: 16px 18px;
+  border-radius: var(--r-radius-inner);
+  background: var(--r-soft);
+}
+
+/* Only where the quote is itself the grid item. Filling the height has to stay
+   scoped here: in the tension columns the quotes are stacked inside a stretched
+   card, and each one taking its parent's full height ran them out of the band. */
+.axquotes .quote {
+  height: 100%;
+}
+
+/* A quote in the reading column has no card behind it, and the tint it takes
+   inside one is all but invisible against the grey page. There it becomes the
+   card itself. */
+.read > .quote {
+  background: var(--r-card);
+}
+
+/* An action and the examples under it are two different things, and the quote's
+   own 12px does not say so. */
+.button + .quote {
+  margin-top: 26px;
+}
+.quote blockquote {
+  font-size: var(--r-quote);
+  line-height: 1.8;
+}
+.quote figcaption {
+  margin-top: auto;
+  padding-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--r-ink3);
+}
+.qid {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--r-radius-control);
+  background: var(--r-line2);
+  color: var(--r-ink2);
+  font-size: var(--r-micro);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.quote figcaption a {
+  color: var(--r-blue);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--r-quick) var(--r-ease);
+}
+.quote figcaption a:hover {
+  color: var(--r-blue-deep);
+}
+
+/* ---- Tensions ----------------------------------------------------------- */
+
+/* The one warm ground on the page, because this is the only place where two
+   demands really oppose each other. It is the dashboard's caution note colour
+   rather than a hue invented for this screen. */
+.tensions {
+  background: var(--r-note);
+}
+.tension + .tension {
+  margin-top: 30px;
+  padding-top: 30px;
+  border-top: 1px solid #f0e3d1;
+}
+.tension h3 {
+  color: var(--r-note-ink);
+}
+.tension .serif {
+  margin-top: 11px;
+}
+.sidebyside {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  /* Stretch, so the two columns end level however many quotes each holds. */
+  align-items: stretch;
+}
+.tside {
+  padding: 18px 20px 20px;
+  border-radius: var(--r-radius-card);
+  background: var(--r-card);
+}
+.tside h4 {
+  color: var(--r-ink);
+}
+.tside .quote {
+  background: var(--r-note);
+}
+
+/* ---- Tables ------------------------------------------------------------- */
+
+/* Wide tables scroll inside their own box so the document body never does. */
+/* Held to the reading measure. Stretched across the full wide column, five short
+   columns put a third of a screen between a row's name and its first figure. */
+.scroller {
+  overflow-x: auto;
+  max-width: var(--r-measure);
+  margin-inline: auto;
+  background: var(--r-card);
+  border-radius: var(--r-radius-card);
+  padding: 6px 14px;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.table th,
+.table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--r-line2);
+  text-align: right;
+  font-weight: 700;
+}
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.table thead th {
+  color: var(--r-ink3);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+.table tbody tr {
+  transition: background var(--r-quick) var(--r-ease);
+}
+.table tbody tr:hover {
+  background: var(--r-tint);
+}
+.table th[scope="row"],
+.table thead th:first-child {
+  text-align: left;
+}
+
+/* ---- Implications, controls, colophon ----------------------------------- */
+
+.implications li {
+  padding-top: 22px;
+  margin-top: 22px;
+  border-top: 1px solid var(--r-line);
+}
+.implications li:first-child {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-bottom: 9px;
+  padding: 0 9px;
+  border-radius: var(--r-radius-control);
+  background: var(--r-blue-pale);
+  color: var(--r-blue);
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+/* The dashboard's own button: 37px tall, 5px corners, 15px bold. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 37px;
+  margin-top: 18px;
+  padding: 0 20px;
+  border-radius: var(--r-radius-control);
+  background: var(--r-blue);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  transition: background var(--r-quick) var(--r-ease);
+}
+.button:hover:not(:disabled) {
+  background: var(--r-blue-deep);
+}
+.button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Leaving the document is never the main action on the page it ends, so the way
+   back is quieter than the thing the officer actually came for. */
+.buttonghost {
+  background: var(--r-line2);
+  color: var(--r-ink2);
+}
+.buttonghost:hover:not(:disabled) {
+  background: var(--r-line);
+  color: var(--r-ink);
+}
+
+.meta {
+  margin-top: 24px;
+  margin-bottom: 28px;
+  background: var(--r-card);
+  border-radius: var(--r-radius-card);
+  padding: 4px 16px;
+}
+.meta > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--r-line2);
+  font-size: 12.5px;
+}
+.meta > div:last-child {
+  border-bottom: 0;
+}
+.meta dt {
+  color: var(--r-ink3);
+  font-weight: 600;
+}
+.meta dd {
+  font-weight: 700;
+  text-align: right;
+  word-break: break-all;
+}
+
+.root a:focus-visible,
+.root button:focus-visible {
+  outline: 2px solid var(--r-blue);
+  outline-offset: 2px;
+}
+
+/* ---- Narrow ------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .figures {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .axdefs,
+  .poles,
+  .axquotes,
+  .sidebyside {
+    grid-template-columns: 1fr;
+  }
+  .row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .rownum {
+    text-align: left;
+  }
+  .panel > div > * {
+    margin-left: 6px;
+  }
+  .section {
+    padding-block: 54px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    scroll-behavior: auto;
+  }
+  .caret,
+  .voicelayer {
+    animation: none;
+  }
+  .person {
+    animation: none;
+  }
+  /* Blocks are shown outright rather than waiting for the observer, so nothing
+     depends on a reveal that this reader has asked not to see. */
+  .section > .read,
+  .section > .wide {
+    opacity: 1;
+    transform: none;
+  }
+}

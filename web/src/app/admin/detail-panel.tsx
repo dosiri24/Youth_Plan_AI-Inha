@@ -314,7 +314,7 @@ function aiView(run: AnalysisRun, card: AiNoteCard): View {
     sub: "이 카드의 수치가 무엇을 시사하는가",
     body: (
       <>
-        {/* insight.md contracts <b> emphasis inside each note, so the tags render. */}
+        {/* briefing.md contracts <b> emphasis inside each note, so the tags render. */}
         <div
           className={styles.aiRead}
           dangerouslySetInnerHTML={{ __html: run.ai_notes?.[card] ?? "" }}

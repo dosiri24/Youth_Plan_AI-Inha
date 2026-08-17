@@ -1,0 +1,109 @@
+/* Shared tokens for the briefing. Every root element of the report and of its
+   overlay applies `.tokens`, because the overlay is not always a descendant of
+   the page and custom properties only inherit down the tree.
+
+   The palette is the dashboard's, so the two admin screens read as one product.
+   Values marked "dashboard" are copied from dashboard.module.css unchanged; the
+   few that differ are noted with the reason. */
+
+.tokens {
+  --r-blue: #005eb8; /* dashboard --blue */
+  --r-blue-deep: #00447f;
+  --r-blue-soft: #cfe1f3;
+  --r-blue-pale: #eaf2fa; /* dashboard .sect.on */
+
+  /* Incheon Green, Pantone 326C — the city's own second colour beside Incheon
+     Blue (300C), and the same value the dashboard carries as --green. It is
+     lighter than the blue, so it is used for fills and marks only. */
+  --r-teal: #00b2a9;
+  /* The same green as text. #00b2a9 reads at 2.4:1 on white and cannot carry a
+     word; this is the dashboard's own teal ink. */
+  --r-teal-ink: #00847d;
+
+  /* The one warm ground, kept for the tension section. Taken from the
+     dashboard's caution note rather than invented. */
+  --r-note: #fff8ef;
+  --r-note-ink: #8a4b09;
+
+  --r-ink: #16181a; /* dashboard --ink */
+  --r-ink2: #565d62; /* dashboard --ink2 */
+  /* Darker than the dashboard's #8a9196, which is 2.8:1 here and fails AA. This
+     carries every sub-label under a bar, so it has to be readable. */
+  --r-ink3: #656d73;
+  --r-line: #e3e7ea; /* dashboard --line */
+  --r-line2: #f1f4f6; /* dashboard .track */
+  --r-tint: #f5f8fb; /* dashboard row hover */
+  --r-soft: #f6f9fb; /* dashboard .ctx .q */
+  --r-bg: #eceff2; /* dashboard --bg */
+  --r-card: #fff;
+
+  /* Narrative and quotes are serif; headings, numbers and labels are sans. The
+     stack names Korean faces before the generic, which on its own would drop to
+     a Latin serif and render Hangul from an unrelated fallback. */
+  --r-serif:
+    var(--font-report-serif), "Noto Serif KR", "Apple SD Gothic Neo",
+    "Nanum Myeongjo", serif;
+
+  /* Two widths, and only two, and both centred on the page. Prose sits on one
+     column wherever it appears — inside a wide block it takes the reading
+     column's own inner measure, so a caption under a chart lands on exactly the
+     same axis as the paragraphs above it. Charts break out to the wide column
+     around that. */
+  --r-wide: 1120px;
+  --r-read: 680px;
+  --r-gutter: 32px;
+  /* The reading column minus its gutters: the width prose actually occupies, so
+     a centred block inside .wide lines up with a block inside .read to the pixel. */
+  --r-measure: calc(var(--r-read) - var(--r-gutter) * 2);
+
+  /* Type scale. Sans sets every heading, number and control; serif sets prose.
+     Heading weights and tracking follow the dashboard's cards. */
+  --r-display: 44px;
+  --r-h2: 27px;
+  --r-h3: 18px;
+  --r-h4: 13.5px;
+  --r-lede: 24px;
+  --r-prose: 17px;
+  --r-quote: 16px;
+  --r-body: 14px;
+  --r-small: 12.5px;
+  --r-micro: 11px;
+
+  /* Corner radii follow the dashboard: 12px cards, 5px controls and chips. */
+  --r-radius-card: 12px;
+  --r-radius-inner: 8px;
+  --r-radius-control: 5px;
+  --r-radius-bar: 5px;
+
+  /* Motion. Reveals are slow and only ever play once; anything the officer
+     drives answers faster than that, or the screen feels sluggish. */
+  --r-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --r-ease-soft: cubic-bezier(0.33, 0, 0.15, 1);
+  --r-reveal: 620ms;
+  --r-grow: 900ms;
+  --r-quick: 170ms;
+  --r-step: 55ms;
+}
+
+@media (max-width: 900px) {
+  .tokens {
+    --r-gutter: 20px;
+    --r-display: 30px;
+    --r-h2: 22px;
+    --r-h3: 16.5px;
+    --r-lede: 20px;
+    --r-prose: 16.5px;
+    --r-quote: 15.5px;
+  }
+}
+
+/* Every motion in this screen is decoration over a layout that is already correct,
+   so the whole system switches off in one place. */
+@media (prefers-reduced-motion: reduce) {
+  .tokens {
+    --r-reveal: 1ms;
+    --r-grow: 1ms;
+    --r-quick: 1ms;
+    --r-step: 0ms;
+  }
+}

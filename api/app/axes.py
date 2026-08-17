@@ -3,11 +3,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TypedDict
 
-AxisDefinition = tuple[str, tuple[str, str], str, str]
+AxisDefinition = tuple[str, tuple[str, str], str, str, dict[str, str]]
 
 _AXES_PATH = Path(__file__).resolve().parents[1] / "prompts" / "axes.md"
 _AXIS_COUNT = 4
-_REQUIRED_FIELDS = {"axis", "poles", "default", "display"}
+_REQUIRED_FIELDS = {"axis", "poles", "default", "display", "names"}
 _DEFINITIONS_START = "## 4축 정의"
 _DEFINITIONS_END = "## 채점 앵커"
 
@@ -59,12 +59,13 @@ def _validate_axes(value: object) -> tuple[AxisDefinition, ...]:
     definitions: list[AxisDefinition] = []
     for item in value:
         if not isinstance(item, dict) or set(item) != _REQUIRED_FIELDS:
-            raise ValueError("each axis must contain axis, poles, default, and display")
+            raise ValueError("each axis must contain axis, poles, default, display, and names")
 
         axis = item["axis"]
         pole_values = item["poles"]
         default = item["default"]
         display = item["display"]
+        names = item["names"]
         if (
             not isinstance(pole_values, list)
             or len(pole_values) != 2
@@ -79,17 +80,24 @@ def _validate_axes(value: object) -> tuple[AxisDefinition, ...]:
             raise ValueError("each default must be one of its axis poles")
         if not isinstance(display, str) or not display.strip():
             raise ValueError("each display must be a non-empty name")
-        definitions.append((axis, poles, default, display))
+        if not isinstance(names, dict) or set(names) != set(poles):
+            raise ValueError("each names map must match its axis poles")
+        if not all(isinstance(name, str) and name.strip() for name in names.values()):
+            raise ValueError("each pole name must be a non-empty string")
+        definitions.append((axis, poles, default, display, dict(names)))
 
     # A repeated letter would make a four-position type code ambiguous to read back.
-    letters = [pole for _axis, poles, _default, _display in definitions for pole in poles]
+    letters = [pole for _axis, poles, _default, _display, _names in definitions for pole in poles]
     if len(set(letters)) != len(letters):
         raise ValueError("every pole letter must be unique across all axes")
     return tuple(definitions)
 
 
 AXES = load_axes()
-AXIS_NAMES = tuple(axis for axis, _poles, _default, _display in AXES)
-SCORING_AXES = tuple((axis, poles, default) for axis, poles, default, _display in AXES)
-AXIS_POLES = {axis: frozenset(poles) for axis, poles, _default, _display in AXES}
-DISPLAY_AXES = tuple((axis, display) for axis, _poles, _default, display in AXES)
+AXIS_NAMES = tuple(axis for axis, _poles, _default, _display, _names in AXES)
+SCORING_AXES = tuple((axis, poles, default) for axis, poles, default, _display, _names in AXES)
+AXIS_POLES = {axis: frozenset(poles) for axis, poles, _default, _display, _names in AXES}
+DISPLAY_AXES = tuple((axis, display) for axis, _poles, _default, display, _names in AXES)
+POLE_NAMES: dict[str, str] = {
+    pole: names[pole] for _axis, poles, _default, _display, names in AXES for pole in poles
+}

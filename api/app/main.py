@@ -73,9 +73,12 @@ class DeleteSubmissionRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Log application startup with the identifiers every tuning measurement is filed under."""
+    settings = get_settings()
     log_event(
         "startup",
-        model=get_settings().gemini_model,
+        model=settings.gemini_model,
+        interview_provider=settings.interview_provider,
+        claude_model=settings.claude_model,
         prompts=prompts.prompt_fingerprint(),
     )
     yield
@@ -148,10 +151,8 @@ def send_message(session_id: str, request: MessageRequest) -> StreamingResponse:
 
 @app.delete("/api/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 def abandon_interview(session_id: str) -> Response:
-    """Discard one active interview without saving any data."""
-    current = _find_session(session_id)
-    if current["status"] != "active":
-        raise HTTPException(status.HTTP_409_CONFLICT)
+    """Discard one unsubmitted interview without saving any data."""
+    _find_session(session_id)
     session.discard_session(session_id)
     log_event("abandoned", session_id=session_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
