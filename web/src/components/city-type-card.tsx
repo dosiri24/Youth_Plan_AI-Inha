@@ -4,7 +4,11 @@ import Image from "next/image";
 import { forwardRef, useState } from "react";
 
 import { AXIS_INFO, getDisplayStrength, getPoleBadge } from "@/lib/city-axes";
-import { getCityType } from "@/lib/city-types";
+import {
+  getCityType,
+  TYPE_IMAGE_HEIGHT,
+  TYPE_IMAGE_WIDTH,
+} from "@/lib/city-types";
 import type { AxisResult, TypeResult } from "@/lib/api";
 
 type CityTypeCardProps = {
@@ -109,15 +113,21 @@ export const CityTypeCard = forwardRef<HTMLDivElement, CityTypeCardProps>(
             </h1>
           </div>
         ) : (
+          // A stamp sheet loses its border the moment it is cropped, so the asset is
+          // fitted whole into the fixed slot and any leftover margin keeps the card
+          // background rather than reading as a band.
           <Image
             alt={`${content.nickname} 유형 일러스트`}
-            className="h-auto w-full bg-secondary"
-            height={360}
+            className="h-auto w-full bg-card object-contain"
+            height={TYPE_IMAGE_HEIGHT}
             onError={() => setImageFailed(true)}
             priority
             src={content.image}
+            style={{
+              aspectRatio: `${TYPE_IMAGE_WIDTH} / ${TYPE_IMAGE_HEIGHT}`,
+            }}
             unoptimized
-            width={480}
+            width={TYPE_IMAGE_WIDTH}
           />
         )}
 

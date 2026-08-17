@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.7-flash"
     file_search_store_name: str | None = None
     gcp_project_id: str | None = None
-    interview_target_turns: int = 15
-    interview_wrapup_turn: int = 12
+    interview_target_turns: int = 18
+    interview_wrapup_turn: int = 15
     dev_mode: bool = False
     access_code: str = ""
     web_origin: str = "http://localhost:3000"
