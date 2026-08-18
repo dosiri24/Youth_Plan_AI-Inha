@@ -30,7 +30,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
         코드를 입력해 주세요
       </h1>
       <p className="mt-3 mb-8 text-[15px] leading-7 text-muted-foreground">
-        운영 대시보드는 코드를 아는 사람만 볼 수 있습니다.
+        관리 화면은 코드를 아는 사람만 볼 수 있습니다.
       </p>
       <AccessCodeForm
         message={

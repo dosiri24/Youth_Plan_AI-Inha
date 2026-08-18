@@ -42,8 +42,7 @@ export default function ActivityPage() {
     <div>
       <h1 className="text-[26px] font-bold tracking-[-0.02em]">접속 현황</h1>
       <p className="mt-1.5 text-[14px] text-muted-foreground">
-        참여자와 담당자가 언제, 어떤 기기로 들어와 무엇을 했는지 기록합니다. IP는
-        마지막 자리를 가려 저장합니다.
+        참여자와 담당자의 접속 기록입니다. IP는 마지막 자리를 가려 저장합니다.
       </p>
 
       <div className="mt-6">
@@ -54,7 +53,7 @@ export default function ActivityPage() {
         )}
         {state.status === "error" && (
           <p className="rounded-2xl bg-card px-5 py-8 text-center text-[14px] text-muted-foreground">
-            접속 현황을 불러오지 못했습니다.
+            접속 현황을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.
           </p>
         )}
         {state.status === "ready" && (
@@ -75,7 +74,7 @@ export default function ActivityPage() {
             <div className="mt-4">
               {state.activity.events.length === 0 ? (
                 <p className="rounded-2xl bg-card px-5 py-12 text-center text-[14px] text-muted-foreground">
-                  아직 기록이 없어요
+                  아직 기록이 없습니다.
                 </p>
               ) : (
                 <div className="overflow-hidden rounded-2xl bg-card">
@@ -86,7 +85,7 @@ export default function ActivityPage() {
                           시각 (KST)
                         </th>
                         <th className="px-5 py-3.5 text-[13px] font-semibold text-muted-foreground">
-                          이벤트
+                          활동
                         </th>
                         <th className="px-5 py-3.5 text-[13px] font-semibold text-muted-foreground">
                           IP

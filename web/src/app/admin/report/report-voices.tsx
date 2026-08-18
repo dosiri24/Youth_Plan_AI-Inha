@@ -378,7 +378,7 @@ export function VoiceScrolly({
             come before them or a keyboard reader meets three dozen dots with no
             means of skipping past. */}
         <a className={styles.skipseq} href={skipTo}>
-          바로 요약 보기 ↓
+          핵심 정리로 건너뛰기 ↓
         </a>
 
         {/* The typed copy is decorative; this is the sentence a screen reader is
@@ -453,7 +453,7 @@ export function VoiceScrolly({
           <div className={styles.pickstrip}>
             <b>{getCityType(person.code).nickname}</b>
             <span>
-              {person.region} · {person.age}세 · 대화 {person.turns}턴
+              {person.region} · {person.age}세 · 대화 {person.turns}회
             </span>
             <button onClick={() => onSelect(null)} type="button">
               닫기

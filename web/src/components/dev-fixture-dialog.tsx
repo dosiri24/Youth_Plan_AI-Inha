@@ -131,15 +131,15 @@ export function DevFixtureDialog({
           id="dev-mode-title"
           className="mt-2 text-[22px] font-bold tracking-[-0.02em]"
         >
-          {stage === "code" ? "코드를 입력해 주세요" : "대화 묶음집 선택"}
+          {stage === "code" ? "코드를 입력해 주세요" : "예시 대화 선택"}
         </h2>
         <p
           id="dev-mode-description"
           className="mt-3 text-[15px] leading-6 text-muted-foreground"
         >
           {stage === "code"
-            ? "개발자 모드는 코드를 아는 사람만 열 수 있어요."
-            : "완주한 대화를 현재 세션에 불러와요. 불러오는 즉시 인터뷰가 종료되고 결과로 넘어갈 수 있어요."}
+            ? "코드를 입력하면 예시 대화를 고를 수 있어요."
+            : "완료된 예시 대화를 불러오면 바로 결과를 확인할 수 있어요."}
         </p>
 
         {stage === "code" ? (
@@ -154,7 +154,7 @@ export function DevFixtureDialog({
           <div className="mt-6 grid gap-2.5">
             {listing ? (
               <p className="py-4 text-center text-[14px] text-muted-foreground">
-                대화 묶음집을 불러오고 있어요
+                예시 대화를 불러오고 있어요
               </p>
             ) : (
               fixtures.map((fixture) => (

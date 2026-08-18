@@ -41,7 +41,7 @@ export function ShareActions({
         ) : (
           <Download aria-hidden="true" className="size-5" />
         )}
-        {action === "download" ? "이미지 준비 중" : "이미지로 저장하기"}
+        {action === "download" ? "이미지 준비 중" : "이미지 저장"}
       </Button>
     </div>
   );

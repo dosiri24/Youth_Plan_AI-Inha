@@ -37,9 +37,6 @@ type Props = {
 /** Gap between districts as the colour washes in, busiest first. */
 const INK_STEP = 80;
 
-/** Breathing room between the district outline and the highlight box. */
-const HIGHLIGHT_PAD = 4;
-
 /**
  * Incheon drawn from the simplified July 2026 district boundaries. The frame is
  * cropped to keep the mainland large, and Ongjin-gun, which falls outside it,
@@ -54,8 +51,6 @@ export function IncheonMapCard({
 }: Props) {
   const seaRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
-  const pathRefs = useRef<Record<string, SVGPathElement | null>>({});
-  const [box, setBox] = useState<DOMRect | null>(null);
 
   useEffect(() => {
     const sea = seaRef.current;
@@ -69,13 +64,6 @@ export function IncheonMapCard({
     return () => observer.disconnect();
   }, []);
 
-  /* The highlight is measured from the selected shape and drawn as the last
-     element of the map, because anything painted after it would cover it. */
-  useEffect(() => {
-    const path = selected === null ? null : pathRefs.current[selected];
-    setBox(path ? path.getBBox() : null);
-  }, [selected, size]);
-
   // One ramp from white to Incheon Blue, with zero participants at the palest end.
   const top = Math.max(0, ...Object.values(counts));
   const max = top || 1;
@@ -86,6 +74,11 @@ export function IncheonMapCard({
   const ink = (n: number) => (n / max > 0.55 ? "#fff" : "#3d4448");
   const halo = (n: number) =>
     n / max > 0.55 ? "rgba(0,50,100,.55)" : "rgba(255,255,255,.85)";
+
+  /* Picking one district pushes the rest back rather than boxing the winner in:
+     the outline can then follow the real boundary instead of a bounding box. */
+  const faded = (region: string) => selected !== null && selected !== region;
+  const picked = MAP.d.find((district) => district.name === selected) ?? null;
 
   const order = [...MAP.d.map((district) => district.name), "옹진군"].sort(
     (left, right) => (counts[right] ?? 0) - (counts[left] ?? 0),
@@ -133,13 +126,12 @@ export function IncheonMapCard({
                   return (
                     <path
                       aria-label={`${district.name} ${n}명`}
-                      className={styles.dist}
+                      className={`${styles.dist} ${
+                        faded(district.name) ? styles.back : ""
+                      }`}
                       d={district.d}
                       fill={reveal.grown ? fill(n) : "#fff"}
                       key={district.name}
-                      ref={(node) => {
-                        pathRefs.current[district.name] = node;
-                      }}
                       stroke="#fff"
                       strokeLinejoin="round"
                       strokeWidth="1.6"
@@ -156,7 +148,11 @@ export function IncheonMapCard({
                       className={styles.dtext}
                       key={district.name}
                       style={{
-                        opacity: reveal.grown ? 1 : 0,
+                        opacity: reveal.grown
+                          ? faded(district.name)
+                            ? 0.35
+                            : 1
+                          : 0,
                         ...inkLag(district.name),
                       }}
                     >
@@ -181,21 +177,18 @@ export function IncheonMapCard({
                     </g>
                   );
                 })}
-                {box && (
-                  <rect
-                    className={styles.pick}
-                    height={box.height + HIGHLIGHT_PAD * 2}
-                    width={box.width + HIGHLIGHT_PAD * 2}
-                    x={box.x - HIGHLIGHT_PAD}
-                    y={box.y - HIGHLIGHT_PAD}
-                  />
+                {picked && (
+                  <g className={styles.pick} key={picked.name}>
+                    <path d={picked.d} pathLength={1} />
+                    <path d={picked.d} pathLength={1} />
+                  </g>
                 )}
               </g>
             </svg>
             <div
               className={`${styles.onjin} ${styles.dist} ${
-                selected === "옹진군" ? styles.on : ""
-              }`}
+                faded("옹진군") ? styles.back : ""
+              } ${selected === "옹진군" ? styles.on : ""}`}
               style={{
                 width: ONJIN_BOX.w * scale,
                 height: ONJIN_BOX.h * scale,

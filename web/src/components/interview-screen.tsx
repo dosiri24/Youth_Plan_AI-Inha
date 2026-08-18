@@ -532,14 +532,11 @@ export function InterviewScreen({
                 <h2 className="mt-2 text-[21px] font-bold tracking-[-0.02em]">
                   이야기를 모두 나눴어요
                 </h2>
-                <p className="mt-2 text-[15px] leading-6 text-muted-foreground">
-                  바다의 마지막 인사를 읽었다면 결과를 확인하러 가세요.
-                </p>
                 <Button
                   className="mt-5 h-14 w-full rounded-2xl text-[16px] font-bold"
                   onClick={onComplete}
                 >
-                  대화 종료하기
+                  결과 보러 가기
                 </Button>
               </section>
             )}
@@ -592,7 +589,7 @@ export function InterviewScreen({
             />
             {streaming && turn ? (
               <Button
-                aria-label="답변 생성 중단하기"
+                aria-label="답변 멈추기"
                 className="size-11 rounded-2xl bg-incheon-gray text-white hover:bg-incheon-gray/90"
                 onClick={stopStream}
                 size="icon"

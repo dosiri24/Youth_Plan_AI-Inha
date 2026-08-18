@@ -78,13 +78,13 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
           어떤 하루를 보내고 싶나요?
         </h1>
         <p className="mt-4 text-[16px] leading-7 text-muted-foreground">
-          유스플랜AI는 AI와 대화하며 내가 바라는 2040년 인천의 일상과 필요한
-          변화를 함께 정리하는 서비스예요. 들려주신 목소리는 미래 도시를 계획할
-          때 청년의 관점이 빠지지 않도록 돕는 소중한 자료가 됩니다.
+          AI와 대화하며 내가 바라는 2040년 인천의 일상과 필요한 변화를 함께
+          정리해요. 들려주신 이야기는 2040년 인천을 계획할 때 청년의 관점을
+          반영하는 자료가 돼요.
         </p>
         {/* The only place the duration is stated, so the interviewer never guesses it. */}
         <p className="mt-3 text-[15px] font-semibold text-incheon-green">
-          AI와 인터뷰는 5~10분 정도 소요됩니다.
+          인터뷰는 5~10분 정도 걸려요.
         </p>
       </div>
 
@@ -101,7 +101,7 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
             id="birth-year-error"
             className={`shrink-0 text-[12px] whitespace-nowrap text-muted-foreground ${invalid ? "visible" : "invisible"}`}
           >
-            1900~2026년으로 입력해 주세요
+            1900~2026 사이로 입력해 주세요
           </p>
         </div>
         <input
@@ -204,7 +204,7 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
           disabled={!agreed || !valid || gender === null || pending}
           type="submit"
         >
-          {pending ? "본인인증을 확인하고 있어요" : "본인인증하고 인터뷰하기"}
+          {pending ? "본인인증을 확인하고 있어요" : "본인인증하고 시작하기"}
         </Button>
         <p className="mt-2.5 text-center text-[12px] leading-5 text-muted-foreground">
           시연용 서비스라 실제 본인인증 절차 없이 진행돼요.
@@ -223,7 +223,7 @@ function ErrorScreen({ onReturn }: ErrorScreenProps) {
   return (
     <section className="flex flex-1 flex-col items-center justify-center bg-card px-6 text-center">
       <h1 className="text-[26px] leading-9 font-bold tracking-[-0.03em]">
-        일시적인 오류가 발생했습니다
+        잠시 문제가 생겼어요
       </h1>
       <Button
         className="mt-9 h-14 w-full rounded-2xl text-base font-bold"

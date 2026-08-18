@@ -112,8 +112,8 @@ export function ConfirmDialog({
           id="quit-description"
           className="mt-3 text-[15px] leading-6 text-muted-foreground"
         >
-          지금까지 나눈 대화는 모두 버려지고 다시 복구할 수 없어요. 결과도
-          만들어지지 않아요.
+          지금까지 나눈 대화는 삭제되어 되돌릴 수 없고, 결과도 만들어지지
+          않아요.
         </p>
 
         <div className="mt-7 grid gap-2.5">
@@ -130,7 +130,7 @@ export function ConfirmDialog({
             disabled={pending}
             onClick={onConfirm}
           >
-            {pending ? "대화를 버리는 중..." : "대화 버리고 나가기"}
+            {pending ? "대화를 버리고 있어요" : "대화 버리고 나가기"}
           </Button>
         </div>
       </div>

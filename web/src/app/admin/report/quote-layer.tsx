@@ -18,9 +18,9 @@ import tokens from "./tokens.module.css";
 type Mode = "axis" | "topic" | "region" | "age";
 
 const MODES: { value: Mode; label: string }[] = [
-  { value: "axis", label: "축" },
+  { value: "axis", label: "도시가치 축" },
   { value: "topic", label: "계획 부문" },
-  { value: "region", label: "자치구" },
+  { value: "region", label: "군·구" },
   { value: "age", label: "연령대" },
 ];
 
@@ -222,12 +222,11 @@ export function QuoteLayer({
 
       <div className={styles.body}>
         {quotes.length === 0 ? (
-          <p className={styles.empty}>
-            이번 실행에는 표시할 인용이 없습니다. 비식별 사본이 있는 제출본이
-            없으면 인용이 만들어지지 않습니다.
-          </p>
+          <p className={styles.empty}>표시할 비식별 인용이 없습니다.</p>
         ) : found.length === 0 ? (
-          <p className={styles.empty}>검색 결과가 없습니다.</p>
+          <p className={styles.empty}>
+            검색 결과가 없습니다. 검색어를 바꾸거나 지워 보세요.
+          </p>
         ) : (
           groups.map((section) => (
             <section className={styles.section} key={section.key}>

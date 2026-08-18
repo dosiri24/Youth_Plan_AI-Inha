@@ -293,10 +293,10 @@ export function ReportDotMap({
           role="img"
           viewBox={`0 0 ${MAP.vw} ${MAP.vh}`}
         >
-          <title id={titleId}>자치구별 참여자 분포</title>
+          <title id={titleId}>군·구별 참여자 분포</title>
           <desc id={descId}>
             점 하나가 참여자 한 명입니다. 참여자 {people.length}명 가운데{" "}
-            {shown}명을 자치구 도형 안에 표시했습니다.
+            {shown}명을 군·구 도형 안에 표시했습니다.
           </desc>
           {MAP.d.map((district) => (
             <path
@@ -409,7 +409,7 @@ export function ReportDotMap({
               smaller figures for the same poles; without this the two read as a
               contradiction. */}
           <span className={styles.legendnote}>
-            기본 극 포함 · 참여자 {people.length}명 전원
+            참여자 {people.length}명 전원
           </span>
         </div>
       )}
@@ -418,7 +418,7 @@ export function ReportDotMap({
           participants are named in a caption instead of drawn. */}
       {missing > 0 && (
         <figcaption className={styles.caption}>
-          자치구 미확인 {missing}명은 지도에 표시하지 않았습니다.
+          군·구 미확인 {missing}명은 지도에 표시하지 않았습니다.
         </figcaption>
       )}
     </figure>

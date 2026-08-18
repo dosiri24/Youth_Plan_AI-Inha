@@ -56,12 +56,16 @@ export function Rich({
  */
 export function AiText({ html }: { html: string | undefined }) {
   if (!html?.trim()) {
-    return <p className={styles.missing}>AI 서술 없음</p>;
+    return (
+      <p className={styles.missing}>
+        AI 해석을 만들지 못했습니다. 대시보드에서 분석을 업데이트해 주세요.
+      </p>
+    );
   }
 
   return (
     <div className={styles.ai}>
-      <span className={styles.aitag}>AI 서술</span>
+      <span className={styles.aitag}>AI 해석</span>
       <Rich className={styles.aibody} html={html} />
     </div>
   );
@@ -107,7 +111,7 @@ export function QuoteText({ quote }: { quote: BriefingQuote }) {
     <figure className={styles.quote}>
       <blockquote>“{quote.text}”</blockquote>
       <figcaption>
-        {quote.demand_title} · {quote.region || "자치구 미확인"}
+        {quote.demand_title} · {quote.region || "군·구 미확인"}
         {quote.age_band ? ` · ${quote.age_band}세` : ""}
         <span className={styles.qid}>{quote.quote_id}</span>
       </figcaption>
@@ -150,7 +154,7 @@ export function FindingsSection({
           </ol>
         ) : (
           <p className={styles.missing}>
-            AI 서술 없음 — 이번 실행은 핵심 정리를 생성하지 못했습니다.
+            AI 해석을 만들지 못했습니다. 대시보드에서 분석을 업데이트해 주세요.
           </p>
         )}
       </div>
@@ -169,42 +173,34 @@ export function MethodSection({ sample }: { sample: string | undefined }) {
       <div className={styles.read}>
         <Head n="02" title="어떻게 조사했나" />
         <div className={styles.fixed}>
-          <span className={styles.layertag}>
-            고정 설명 · 실행마다 바뀌지 않습니다
-          </span>
-
           <h3>인터뷰 방식</h3>
           <p>
             참여자는 AI 인터뷰어와 1:1로 대화했습니다. 인터뷰어는 지금의 하루를
             먼저 듣고 2040년 인천에서의 하루로 넘어가며, 참여자가 방금 한 말에
-            맞춰 꼬리질문을 이어갑니다. 답변은 타이핑으로 받고 한 번에 묻는 것은
-            하나입니다. 대화는 18턴을 목표로 하고, 참여자가 그만하겠다고 말하면
-            그 자리에서 끝냅니다.
+            맞춰 꼬리질문을 이어갑니다. 참여자가 그만하겠다고 말하면 그 자리에서
+            끝냅니다.
           </p>
 
           <h3>증거 기반 판정</h3>
           <p>
-            대화 전체를 한 번에 평가하지 않습니다. 참여자가 스스로 꺼낸 발화에서
-            미시 증거를 뽑고, 그 증거의 가중치를 코드가 합산해 축마다 판정
-            글자와 강도를 냅니다. 인터뷰어가 답의 후보를 내밀어 받아낸 답은
-            증거로 세지 않습니다. 유도해서 얻은 답이 아무 값도 갖지 않아야
-            인터뷰어에게 그 질문이 지름길이 되지 않기 때문입니다. 증거가 한 건도
-            없는 축은 기본 극으로 채우고 축별 집계에서 뺍니다.
+            참여자가 스스로 꺼낸 발화만 판정 근거로 삼습니다. 인터뷰어가 답의
+            후보를 내밀어 받아낸 답은 근거로 세지 않습니다. 유도해서 얻은 답이
+            아무 값도 갖지 않아야 인터뷰어에게 그 질문이 지름길이 되지 않기
+            때문입니다. 근거를 찾지 못한 축은 축별 집계에서 뺍니다.
           </p>
 
           <h3>비식별 처리</h3>
           <p>
-            제출된 요구와 인용 발화는 비식별 사본으로 바꾼 뒤 이 문서에 씁니다.
-            인용마다 인용 ID가 붙어 있어 근거를 제출본 상세까지 따라갈 수
-            있습니다.
+            제출된 요구와 발언은 개인을 알아볼 수 없게 처리한 뒤 이 문서에
+            썼습니다. 인용 번호로 해당 제출본까지 확인할 수 있습니다.
           </p>
 
           <h3>표본의 성격과 한계</h3>
           <p>
             참여자는 무작위로 뽑은 표본이 아니라 홍보를 보고 스스로 참여한
             청년입니다. 이 문서의 수치는 참여한 사람들이 실제로 한 말이며 인천
-            청년 전체를 대표하지 않습니다. 자치구당 참여자가 한 자릿수이므로
-            자치구 사이의 요구 성향은 비교하지 않고, 표지의 지도는 참여가 어디에
+            청년 전체를 대표하지 않습니다. 군·구당 참여자가 한 자릿수이므로
+            군·구 사이의 요구 성향은 비교하지 않고, 표지의 지도는 참여가 어디에
             몰렸는지만 보여줍니다.
           </p>
         </div>
@@ -225,10 +221,6 @@ export function MethodSection({ sample }: { sample: string | undefined }) {
             </article>
           ))}
         </div>
-        <p className={styles.caption}>
-          {GUIDE.excluded_axis.display} · {GUIDE.excluded_axis.title} —{" "}
-          {GUIDE.excluded_axis.reason}
-        </p>
       </div>
 
       <div className={styles.read}>
@@ -270,7 +262,10 @@ export function TopicSection({
 
       <div className={styles.wide}>
         {rows.length === 0 ? (
-          <p className={styles.missing}>계획 부문 집계가 아직 없습니다.</p>
+          <p className={styles.missing}>
+            계획 부문 집계가 아직 없습니다. 대시보드에서 분석을 업데이트해
+            주세요.
+          </p>
         ) : (
           <>
             <ul className={styles.rows}>
@@ -318,10 +313,9 @@ export function TopicSection({
               })}
             </ul>
             <p className={styles.caption}>
-              막대 길이는 요구가 가장 많은 부문({max}건)에 대한 상대 길이입니다.
-              부문 이름 아래는 그 부문을 담당하는 부서이고, 뒤의 인원은 참여자{" "}
-              {participants}명 가운데 그 부문을 언급한 사람 수입니다. 부문을
-              누르면 그 부문에서 나온 대표 인용을 펼칩니다.
+              막대는 부문별 요구 건수를 비교합니다. 부문 이름 아래는 담당
+              부서이고, 뒤의 인원은 참여자 {participants}명 가운데 그 부문을
+              언급한 사람 수입니다. 부문을 누르면 대표 인용이 펼쳐집니다.
             </p>
           </>
         )}
@@ -364,7 +358,9 @@ export function AxisSection({
 
       <div className={styles.wide}>
         {stats.length === 0 ? (
-          <p className={styles.missing}>축 집계가 아직 없습니다.</p>
+          <p className={styles.missing}>
+            축 집계가 아직 없습니다. 대시보드에서 분석을 업데이트해 주세요.
+          </p>
         ) : (
           <>
             {stats.map((stat, axisIndex) => {
@@ -447,13 +443,11 @@ export function AxisSection({
               );
             })}
             <p className={styles.caption}>
-              좌우 막대는 같은 축의 두 극을 마주 놓은 것이고, 길이는 여덟 극
-              가운데 인원이 가장 많은 극({max}명)에 대한 상대 길이입니다. 왼쪽
-              극은 인천 블루, 오른쪽 극은 인천 그린으로 인천시 상징색 두 가지를
-              그대로 썼습니다. 두 색은 좋음과 나쁨이 아니라 대등한 선호를
-              가리킵니다. 판정 강도는 백분율이 아니라 그 극으로 얼마나 치우쳐
-              판정됐는지를 51~100으로 나타낸 지표이며, 증거가 없어 기본 극으로
-              채워진 축은 이 집계에 들어가지 않습니다.
+              좌우 막대는 같은 축의 두 극을 마주 놓은 것이고, 길이는 인원이 가장
+              많은 극({max}명)에 대한 상대 길이입니다. 두 색은 좋음과 나쁨이
+              아니라 대등한 선호를 가리킵니다. 판정 강도는 백분율이 아니라 그
+              극으로 얼마나 치우쳐 판정됐는지를 51~100으로 나타낸 값이며, 증거가
+              없어 기본 극으로 채워진 축은 이 집계에 들어가지 않습니다.
             </p>
           </>
         )}
@@ -500,9 +494,7 @@ export function TensionSection({
                   <div className={styles.tside} key={side}>
                     <h4>{label}</h4>
                     {quotes.length === 0 ? (
-                      <p className={styles.missing}>
-                        이쪽을 가리키는 인용을 고르지 못했습니다.
-                      </p>
+                      <p className={styles.missing}>관련 인용이 없습니다.</p>
                     ) : (
                       quotes.map((quote) => (
                         <figure className={styles.quote} key={quote.quote_id}>
@@ -530,7 +522,7 @@ export function TensionSection({
           ))
         ) : (
           <p className={styles.missing}>
-            AI 서술 없음 — 이번 실행은 엇갈리는 요구를 정리하지 못했습니다.
+            AI 해석을 만들지 못했습니다. 대시보드에서 분석을 업데이트해 주세요.
           </p>
         )}
       </div>
@@ -596,7 +588,9 @@ export function CrossSection({
             </p>
           </>
         ) : (
-          <p className={styles.missing}>연령 집계가 아직 없습니다.</p>
+          <p className={styles.missing}>
+            연령 집계가 아직 없습니다. 대시보드에서 분석을 업데이트해 주세요.
+          </p>
         )}
 
         <h3 className={styles.wideh3}>계획 부문과 연령대의 교차</h3>
@@ -629,13 +623,14 @@ export function CrossSection({
               </table>
             </div>
             <p className={styles.caption}>
-              각 칸은 그 연령대가 말한 요구의 건수입니다. 표본이 작아 비율로
-              비교하지 않고 건수만 싣습니다. 집계 대상은 참여자 {participants}
-              명입니다.
+              표본이 작아 비율 대신 요구 건수로 비교했습니다. 집계 대상은 참여자{" "}
+              {participants}명입니다.
             </p>
           </>
         ) : (
-          <p className={styles.missing}>교차 집계가 아직 없습니다.</p>
+          <p className={styles.missing}>
+            교차 집계가 아직 없습니다. 대시보드에서 분석을 업데이트해 주세요.
+          </p>
         )}
       </div>
 
@@ -671,7 +666,9 @@ export function TypeSection({
 
       <div className={styles.wide}>
         {rows.length === 0 ? (
-          <p className={styles.missing}>유형 집계가 아직 없습니다.</p>
+          <p className={styles.missing}>
+            유형 집계가 아직 없습니다. 대시보드에서 분석을 업데이트해 주세요.
+          </p>
         ) : (
           <>
             <ul className={styles.rows}>
@@ -693,11 +690,9 @@ export function TypeSection({
               ))}
             </ul>
             <p className={styles.caption}>
-              막대 길이는 인원이 가장 많은 유형({max}명)에 대한 상대 길이입니다.
-              유형은 네 축의 판정 글자를 이어 붙인 조합이며, 별명 아래에 네 축의
-              기울기를 적었습니다. 집계 대상은 참여자 {participants}명이고
-              증거가 없는 축도 기본 극으로 세므로 모든 참여자가 한 유형에
-              들어갑니다.
+              막대는 도시유형별 참여 인원을 비교합니다. 도시유형은 네 축의
+              판정을 조합한 것이고, 별명 아래에 네 축의 기울기를 적었습니다.
+              참여자 {participants}명 모두 하나의 유형에 들어갑니다.
             </p>
           </>
         )}
@@ -737,7 +732,7 @@ export function ImplicationSection({
           </ul>
         ) : (
           <p className={styles.missing}>
-            AI 서술 없음 — 이번 실행은 확인 질문을 만들지 못했습니다.
+            AI 해석을 만들지 못했습니다. 대시보드에서 분석을 업데이트해 주세요.
           </p>
         )}
       </div>

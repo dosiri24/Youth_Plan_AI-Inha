@@ -11,8 +11,8 @@ import { Sparkles } from "lucide-react";
 
 const STAGES = [
   "대화를 처음부터 다시 읽고 있어요",
-  "도시유형 네 글자를 계산하고 있어요",
-  "왜 그 글자가 나왔는지 정리하고 있어요",
+  "도시유형을 계산하고 있어요",
+  "왜 그 유형이 나왔는지 정리하고 있어요",
   "인천에 바라는 변화를 모으고 있어요",
   "보고서를 마지막으로 다듬고 있어요",
 ];
@@ -94,8 +94,9 @@ export function ResultLoading({ done, onDone }: ResultLoadingProps) {
         </div>
 
         <h1 className="mt-8 text-[26px] leading-9 font-bold tracking-[-0.03em]">
-          당신의 인천을
-          <br />한 장씩 정리하고 있어요
+          내가 바라는 인천을
+          <br />
+          정리하고 있어요
         </h1>
         <p className="mt-4 text-[15px] leading-6 text-muted-foreground">
           모두 만드는 데 15초쯤 걸려요.
@@ -126,11 +127,11 @@ export function ResultLoading({ done, onDone }: ResultLoadingProps) {
             style={{ width: done ? "100%" : filling ? PROGRESS_CEILING : "4%" }}
           />
         </div>
-        <p className="mt-3 text-center text-[13px] leading-5 text-muted-foreground">
-          {done
-            ? "결과 화면으로 넘어갈게요."
-            : "다 만들어지면 결과 화면으로 바로 넘어가요."}
-        </p>
+        {!done && (
+          <p className="mt-3 text-center text-[13px] leading-5 text-muted-foreground">
+            다 만들어지면 결과 화면으로 바로 넘어가요.
+          </p>
+        )}
       </div>
     </section>
   );

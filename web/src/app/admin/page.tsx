@@ -167,15 +167,15 @@ export default function Dashboard() {
     ) : null;
 
   const stamp = updating
-    ? "자료를 다시 계산하는 중입니다"
+    ? "분석을 업데이트하는 중입니다"
     : noSubmissions
       ? "분석할 제출본이 없습니다"
       : status === "loading"
         ? "불러오는 중입니다"
         : status === "error"
-          ? "자료를 불러오지 못했습니다"
+          ? "분석 결과를 불러오지 못했습니다. 새로고침해 주세요"
           : status === "empty" || run === null
-            ? "아직 분석을 실행하지 않았습니다"
+            ? "아직 분석하지 않았습니다"
             : `${formatStamp(run.executed_at)} 기준`;
 
   const kpi = run?.kpi;
@@ -186,7 +186,7 @@ export default function Dashboard() {
 
   const summary: [string, ReactNode, string][] = [
     [
-      "참여자수",
+      "참여자 수",
       kpi ? <CountUp reveal={reveal} value={kpi.participants} /> : "—",
       kpi ? "명" : "",
     ],
@@ -196,7 +196,7 @@ export default function Dashboard() {
       kpi ? "건" : "",
     ],
     [
-      "참여 자치구수",
+      "참여 군·구 수",
       kpi ? (
         <>
           <CountUp reveal={reveal} value={kpi.regions} /> / 11
@@ -206,7 +206,7 @@ export default function Dashboard() {
       ),
       kpi ? "곳" : "",
     ],
-    ["참여 목적", "2040 인천도시기본계획", ""],
+    ["활용 계획", "2040 인천도시기본계획", ""],
   ];
 
   const ageMax = Math.max(1, ...(ages ?? []).map((band) => band.total));
@@ -276,7 +276,7 @@ export default function Dashboard() {
             onClick={download}
             type="button"
           >
-            원자료 내려받기
+            원자료 CSV 내려받기
           </button>
           <button
             className={styles.btn}
@@ -284,7 +284,7 @@ export default function Dashboard() {
             onClick={() => void update()}
             type="button"
           >
-            {updating ? "업데이트 중" : "자료 업데이트"}
+            {updating ? "분석 중" : "분석 업데이트"}
           </button>
         </div>
 
@@ -308,10 +308,7 @@ export default function Dashboard() {
         <div className={styles.grid}>
           <div className={`${styles.col} ${styles.l}`}>
             <div className={styles.card}>
-              <h2>
-                자치구별 참여자수
-                {aiChip("map")}
-              </h2>
+              <h2>군·구별 참여자 수{aiChip("map")}</h2>
               {run?.regions_count ? (
                 <IncheonMapCard
                   counts={run.regions_count}
@@ -326,7 +323,7 @@ export default function Dashboard() {
                 />
               ) : (
                 <div className={styles.body}>
-                  <NoData text="자치구 집계가 아직 없습니다." />
+                  <NoData text="군·구 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
                 </div>
               )}
             </div>
@@ -380,7 +377,7 @@ export default function Dashboard() {
                     </div>
                   ))
                 ) : (
-                  <NoData text="연령 집계가 아직 없습니다." />
+                  <NoData text="연령 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
                 )}
               </div>
             </div>
@@ -404,7 +401,7 @@ export default function Dashboard() {
                     </div>
                   ))
                 ) : (
-                  <NoData text="조사 개요는 분석을 실행하면 채워집니다." />
+                  <NoData text="조사 개요는 분석을 업데이트하면 표시됩니다." />
                 )}
               </div>
             </div>
@@ -432,7 +429,7 @@ export default function Dashboard() {
                       role="button"
                       tabIndex={0}
                     >
-                      {key === 1 ? "건수순" : "사람수순"}
+                      {key === 1 ? "건수순" : "언급 인원순"}
                     </b>
                   ))}
                 </span>
@@ -477,7 +474,7 @@ export default function Dashboard() {
                     </div>
                   ))
                 ) : (
-                  <NoData text="계획 부문 집계가 아직 없습니다." />
+                  <NoData text="계획 부문 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
                 )}
               </div>
             </div>
@@ -544,7 +541,7 @@ export default function Dashboard() {
                     );
                   })
                 ) : (
-                  <NoData text="축 집계가 아직 없습니다." />
+                  <NoData text="축 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
                 )}
               </div>
             </div>
@@ -552,7 +549,7 @@ export default function Dashboard() {
             <div className={styles.pair}>
               <div className={styles.card}>
                 <h2>
-                  연령대별 요구사항 <em>요구 건수</em>
+                  연령대별 요구 <em>요구 건수</em>
                   {aiChip("cross")}
                 </h2>
                 <div
@@ -598,14 +595,14 @@ export default function Dashboard() {
                       ))}
                     </>
                   ) : (
-                    <NoData text="교차 집계가 아직 없습니다." />
+                    <NoData text="교차 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
                   )}
                 </div>
               </div>
 
               <div className={styles.card}>
                 <h2>
-                  내가 바라는 도시유형 <em>4축 조합 · 인원</em>
+                  청년이 바라는 도시유형 <em>4축 조합 · 인원</em>
                   {aiChip("types")}
                 </h2>
                 <div className={`${styles.body} ${styles.types}`}>
@@ -623,7 +620,6 @@ export default function Dashboard() {
                         )}
                         {...pick({ kind: "type", code })}
                       >
-                        <code>{code}</code>
                         <div className={styles.nm}>
                           {getCityType(code).nickname}
                         </div>
@@ -646,7 +642,7 @@ export default function Dashboard() {
                       </div>
                     ))
                   ) : (
-                    <NoData text="유형 집계가 아직 없습니다." />
+                    <NoData text="유형 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
                   )}
                 </div>
               </div>

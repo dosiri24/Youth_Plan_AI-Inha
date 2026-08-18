@@ -38,7 +38,7 @@ type ResultScreenProps = {
 type ResultStep = "type" | "report" | "revise";
 
 type ResultHeaderProps = {
-  description: string;
+  description?: string;
   title: string;
 };
 
@@ -47,9 +47,11 @@ function ResultHeader({ description, title }: ResultHeaderProps) {
   return (
     <header className="bg-card px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-5">
       <h1 className="text-[27px] font-bold tracking-[-0.03em]">{title}</h1>
-      <p className="mt-2 text-[15px] leading-6 text-muted-foreground">
-        {description}
-      </p>
+      {description && (
+        <p className="mt-2 text-[15px] leading-6 text-muted-foreground">
+          {description}
+        </p>
+      )}
     </header>
   );
 }
@@ -90,8 +92,8 @@ function ResultNotice() {
         className="mt-0.5 size-4 shrink-0 text-incheon-gray"
       />
       <p className="text-[13px] leading-5 text-muted-foreground">
-        이 결과는 지금 화면에만 남아 있어요. 새로고침하거나 다시 접속하면 결과를
-        다시 볼 수 없어요.
+        이 결과는 지금 화면에만 남아 있어요. 새로고침하거나 화면을 벗어나면 다시
+        볼 수 없어요.
       </p>
     </div>
   );
@@ -276,8 +278,8 @@ export function ResultScreen({
         }
       >
         <ResultHeader
-          description="대화를 바탕으로 판정한 결과예요."
-          title="내 유형 확인"
+          description="대화를 바탕으로 정리한 내 도시유형이에요."
+          title="내 도시유형"
         />
         <div className="space-y-10 px-5 pt-6 pb-8">
           <div className="space-y-4">
@@ -328,10 +330,7 @@ export function ResultScreen({
           </>
         }
       >
-        <ResultHeader
-          description="내 이야기가 잘 정리됐는지 확인해 주세요."
-          title="내 이야기와 요구 확인"
-        />
+        <ResultHeader title="내 이야기와 요구 확인" />
         <div className="space-y-12 px-5 pt-6 pb-8">
           <ReportOverview report={report} />
 
@@ -340,9 +339,6 @@ export function ResultScreen({
               <h2 className="text-[18px] font-bold">
                 수정하거나 의견을 더하고 싶나요?
               </h2>
-              <p className="mt-2 text-[14px] leading-6 text-muted-foreground">
-                다르게 느껴지는 요구 문장을 골라 생각을 덧붙일 수 있어요.
-              </p>
               <Button
                 className="mt-4 h-13 w-full rounded-2xl text-[15px] font-bold"
                 onClick={() => setStep("revise")}
@@ -385,13 +381,13 @@ export function ResultScreen({
                 className="size-5 animate-spin"
               />
             )}
-            {revising ? "다시 정리하고 있어요" : "의견 반영하고 돌아가기"}
+            {revising ? "다시 정리하고 있어요" : "수정 반영하기"}
           </Button>
         </>
       }
     >
       <ResultHeader
-        description="고른 문장과 의견으로 네 축의 요구를 다시 정리해요."
+        description="다르게 느껴지는 문장을 고르고 의견을 남겨 주세요."
         title="요구 수정"
       />
       <div className="px-5 pt-6 pb-8">

@@ -71,7 +71,6 @@ export function RevisionForm({
     <section aria-labelledby="revision-title">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <p className="text-[13px] font-bold text-primary">요구 수정</p>
           <h2
             id="revision-title"
             className="mt-2 text-[24px] font-bold tracking-[-0.03em]"
@@ -86,14 +85,12 @@ export function RevisionForm({
         )}
       </div>
       <p className="mt-3 text-[15px] leading-6 text-muted-foreground">
-        하나 이상의 문장을 고르고 의견을 남기면 네 축의 요구를 모두 다시 정리해
-        드려요.
+        바꾸고 싶은 문장을 고르고, 어떻게 바꿀지 적어 주세요.
       </p>
 
       {report.meta.revision_count >= 15 && (
         <p className="mt-5 rounded-[20px] bg-[color-mix(in_srgb,var(--color-incheon-green)_10%,white)] px-4 py-3.5 text-[13px] leading-5 text-incheon-gray">
-          충분히 여러 번 다듬었어요. 이제 제출해도 좋아요. 원한다면 계속 수정할
-          수 있어요.
+          충분히 여러 번 다듬었어요. 이제 제출해도 좋아요.
         </p>
       )}
 
@@ -106,10 +103,10 @@ export function RevisionForm({
           <LoaderCircle aria-hidden="true" className="size-5 animate-spin" />
           <div>
             <p className="text-[14px] font-bold">
-              요구 보고서를 다시 정리하고 있어요
+              선택한 의견을 반영하고 있어요
             </p>
             <p className="mt-1 text-[12px] leading-5">
-              선택한 의견을 반영해 네 축 전체를 새로 작성해요.
+              네 가지 축의 요구를 다시 정리해요.
             </p>
           </div>
         </div>

@@ -12,7 +12,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               유스플랜AI
             </span>
             <span className="text-[13px] text-muted-foreground">
-              운영 대시보드
+              청년 의견 관리 플랫폼
             </span>
           </Link>
           <nav className="flex items-center gap-6">

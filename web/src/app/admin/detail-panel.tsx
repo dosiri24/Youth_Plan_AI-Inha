@@ -84,12 +84,6 @@ function topicView(run: AnalysisRun, topic: string): View {
     body: (
       <>
         <h4>이 부문으로 들어온 요구</h4>
-        <div
-          className={styles.li}
-          style={{ color: "#b4520a", fontWeight: 700 }}
-        >
-          언급 장소 확보 0건 — 요구별 장소 추출은 다음 단계입니다
-        </div>
         {items.map(({ person, demand }, index) => (
           <div className={styles.li} key={`${person.submission_id}-${index}`}>
             {demand.title}
@@ -164,16 +158,6 @@ function axisView(run: AnalysisRun, axis: AxisName): View {
             <b>{pole.name}</b> {pole.description}
           </div>
         ))}
-
-        <h4>축 계보</h4>
-        <div className={styles.li}>{guide.lineage}</div>
-
-        <div className={styles.note} style={{ marginTop: 14 }}>
-          <b>
-            {GUIDE.excluded_axis.display} · {GUIDE.excluded_axis.title}
-          </b>{" "}
-          — {GUIDE.excluded_axis.reason}
-        </div>
       </>
     ),
   };
@@ -228,10 +212,7 @@ function regionView(
         )}
       </>
     ) : (
-      <div className={styles.note}>
-        이 군·구에서는 아직 참여자가 없습니다. 홍보를 어디에 더 해야 하는지
-        판단하는 근거로 씁니다.
-      </div>
+      <div className={styles.note}>이 군·구에서는 아직 참여자가 없습니다.</div>
     ),
   };
 }
@@ -241,14 +222,14 @@ function typeView(run: AnalysisRun, code: string): View {
   const type = getCityType(code);
 
   return {
-    label: "내가 바라는 도시유형",
+    label: "청년이 바라는 도시유형",
     title: type.nickname,
     sub: `${spellCode(code)} · ${run.type_distribution[code] ?? 0}명`,
     body: (
       <>
         <h4>이 유형의 뜻</h4>
         <div className={styles.li}>{type.description}</div>
-        <h4>이 유형으로 나온 사람</h4>
+        <h4>이 유형의 참여자</h4>
         {people.map((person) => (
           <div className={styles.li} key={person.submission_id}>
             {person.summary}
@@ -280,10 +261,10 @@ function personView(person: DashboardPerson): View {
             <div className={styles.m}>{axisTitle(reason.axis)}</div>
           </div>
         ))}
-        <h4>이 사람이 낸 요구 {person.demands.length}건</h4>
+        <h4>이 참여자의 요구 {person.demands.length}건</h4>
         {person.demands.length === 0 ? (
           <div className={styles.li}>
-            비식별본이 아직 없어 요구를 표시할 수 없습니다.
+            표시할 요구가 없습니다. 분석을 업데이트한 뒤 다시 확인해 주세요.
           </div>
         ) : (
           person.demands.map((demand, index) => (
@@ -320,9 +301,8 @@ function aiView(run: AnalysisRun, card: AiNoteCard): View {
           dangerouslySetInnerHTML={{ __html: run.ai_notes?.[card] ?? "" }}
         />
         <div className={styles.note} style={{ marginTop: 14 }}>
-          AI가 이번 분석 결과와 축 해설을 함께 읽고 쓴 문장입니다. 그대로 복사해
-          보고자료에 쓸 수 있습니다. 판단의 근거는 왼쪽 수치이며, 인용 전에
-          수치를 함께 확인하십시오.
+          AI가 이번 분석 결과를 읽고 쓴 문장입니다. 보고자료에 인용하기 전 왼쪽
+          수치와 대조해 주세요.
         </div>
       </>
     ),

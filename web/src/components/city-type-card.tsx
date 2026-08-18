@@ -95,7 +95,7 @@ export const CityTypeCard = forwardRef<HTMLDivElement, CityTypeCardProps>(
         <div className="bg-primary px-6 pt-6 pb-6 text-white">
           <div className="flex items-center justify-between gap-4">
             <p className="text-[12px] font-bold tracking-[0.12em] text-white/80">
-              내가 바라는 2040 인천
+              내가 바라는 2040년 인천
             </p>
             <span className="rounded-full bg-incheon-green px-3 py-1 text-[11px] font-bold text-white">
               유스플랜AI

@@ -27,7 +27,7 @@ function StoryOverview({ report }: ReportOverviewProps) {
         id="story-title"
         className="mt-2 text-[24px] font-bold tracking-[-0.03em]"
       >
-        {info.nickname}님의 2040년을 담았어요
+        {info.nickname}님의 이야기
       </h2>
 
       <div className="mt-6 rounded-[24px] bg-card p-5">
@@ -77,7 +77,6 @@ function DemandOverview({ report }: ReportOverviewProps) {
     <section aria-labelledby="demands-title">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <p className="text-[13px] font-bold text-primary">축별 요구 보고서</p>
           <h2
             id="demands-title"
             className="mt-2 text-[24px] font-bold tracking-[-0.03em]"

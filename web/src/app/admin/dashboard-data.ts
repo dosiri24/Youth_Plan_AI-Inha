@@ -27,7 +27,7 @@ export const SECTIONS: Record<string, string> = {
 export const AGE_BANDS = ["19~24", "25~29", "30~34", "35~39"];
 
 export const AI_CARD_TITLES = {
-  map: "자치구별 참여자수",
+  map: "군·구별 참여자 수",
   topics: "계획 부문별 요구",
   axes: "도시가치 4축",
   cross: "연령대별 요구사항",

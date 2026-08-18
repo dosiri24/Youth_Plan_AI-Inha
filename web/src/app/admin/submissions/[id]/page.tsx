@@ -8,10 +8,12 @@ import { Collapsible } from "@base-ui/react/collapsible";
 import {
   AXIS_INFO,
   getDisplayStrength,
+  getPoleBadge,
   getPoleLabel,
-  isSinglePole,
 } from "@/lib/city-axes";
 import { formatDateTime } from "@/lib/format";
+import { spellCode } from "../../dashboard-data";
+import { getCityType } from "@/lib/city-types";
 import {
   getSubmission,
   type AxisDemandFull,
@@ -41,7 +43,6 @@ function SectionTitle({ label, title }: { label: string; title: string }) {
 function TypeResultCard({ axis }: { axis: AxisResultFull }) {
   const info = AXIS_INFO[axis.axis];
   const poles = [info.left, info.right];
-  const singlePole = isSinglePole(axis.strength);
 
   return (
     <article className="rounded-2xl bg-card p-5">
@@ -51,7 +52,7 @@ function TypeResultCard({ axis }: { axis: AxisResultFull }) {
             {info.title}
           </p>
           <h3 className="mt-1 text-[17px] font-bold">
-            {axis.letter} · {getPoleLabel(axis.axis, axis.letter)}
+            {getPoleLabel(axis.axis, axis.letter)}
           </h3>
         </div>
         <span className="shrink-0 text-[15px] font-bold text-primary">
@@ -64,16 +65,7 @@ function TypeResultCard({ axis }: { axis: AxisResultFull }) {
       {axis.empty_axis && (
         <p className="mt-3 rounded-xl bg-muted px-3.5 py-2.5 text-[12px] leading-5 text-muted-foreground">
           <span className="font-bold text-incheon-gray">증거 0건</span> · 이
-          축을 판단할 발화가 없어 기본 극 {axis.letter}로 채운 값입니다. 저장된
-          강도 51은 계산 결과가 아니므로 집계에서도 제외됩니다.
-        </p>
-      )}
-
-      {singlePole && (
-        <p className="mt-3 rounded-xl bg-muted px-3.5 py-2.5 text-[12px] leading-5 text-muted-foreground">
-          <span className="font-bold text-incheon-gray">단극 관측</span> · 반대
-          극 증거가 0건이라 계산 강도는 100입니다. 단정적으로 읽히지 않도록 표시
-          강도는 {getDisplayStrength(axis.strength)}까지만 보여 줍니다.
+          축을 판단할 발화가 없어 집계에서 제외됩니다.
         </p>
       )}
 
@@ -87,7 +79,9 @@ function TypeResultCard({ axis }: { axis: AxisResultFull }) {
                 : "bg-muted text-muted-foreground"
             }`}
           >
-            <dt className="text-[12px] font-semibold">{pole.letter}</dt>
+            <dt className="text-[12px] font-semibold">
+              {getPoleBadge(axis.axis, pole.letter)}
+            </dt>
             <dd className="mt-0.5 text-[18px] font-bold">
               {axis.scores[pole.letter] ?? 0}
             </dd>
@@ -116,7 +110,8 @@ function TypeResultCard({ axis }: { axis: AxisResultFull }) {
                   className="rounded-xl bg-muted px-3.5 py-2.5 text-[13px] leading-6"
                 >
                   <span className="mr-2 font-mono text-[11px] font-bold text-primary">
-                    {item.pole} +{item.weight} · {item.turn}턴
+                    {getPoleBadge(axis.axis, item.pole)} +{item.weight} ·{" "}
+                    {item.turn}번째 발화
                   </span>
                   {item.text}
                 </li>
@@ -133,7 +128,8 @@ function AxisReasonRow({ reason }: { reason: AxisReason }) {
   return (
     <div className="border-b border-border py-4 last:border-b-0">
       <p className="text-[13px] font-bold">
-        {AXIS_INFO[reason.axis].title} · {reason.letter}
+        {AXIS_INFO[reason.axis].title} ·{" "}
+        {getPoleLabel(reason.axis, reason.letter)}
       </p>
       <p className="mt-1.5 text-[14px] leading-6 text-muted-foreground">
         {reason.reason}
@@ -150,7 +146,7 @@ function DemandBlock({ axisDemand }: { axisDemand: AxisDemandFull }) {
         {AXIS_INFO[axisDemand.axis].title}
       </p>
       <h3 className="mt-1 text-[16px] font-bold">
-        {axisDemand.letter} · {getPoleLabel(axisDemand.axis, axisDemand.letter)}
+        {getPoleLabel(axisDemand.axis, axisDemand.letter)}
       </h3>
 
       <div className="mt-4 space-y-5">
@@ -175,7 +171,7 @@ function DemandBlock({ axisDemand }: { axisDemand: AxisDemandFull }) {
                   className="rounded-xl bg-muted px-3.5 py-2 text-[13px] leading-6 text-muted-foreground"
                 >
                   <span className="mr-2 font-mono text-[11px] font-bold text-primary">
-                    {quote.turn}턴
+                    {quote.turn}번째 발화
                   </span>
                   {quote.text}
                 </li>
@@ -198,7 +194,7 @@ function TranscriptRow({ message }: { message: TranscriptMessage }) {
           isUser ? "text-primary" : "text-incheon-green"
         }`}
       >
-        {message.turn}턴 · {isUser ? "참여자" : "AI"}
+        {message.turn}번째 발화 · {isUser ? "참여자" : "바다"}
       </span>
       <p className="text-[14px] leading-6 whitespace-pre-wrap">
         {message.text}
@@ -242,7 +238,7 @@ export default function SubmissionDetailPage({
       )}
       {state.status === "error" && (
         <p className="mt-6 rounded-2xl bg-card px-5 py-8 text-center text-[14px] text-muted-foreground">
-          제출본을 불러오지 못했습니다.
+          제출본을 불러오지 못했습니다. 목록에서 다시 선택해 주세요.
         </p>
       )}
       {state.status === "missing" && (
@@ -257,8 +253,8 @@ export default function SubmissionDetailPage({
 
 /** "기타" also holds participants who declined to say, so it is never read as missing data. */
 const GENDER_LABEL: Record<SelfInfo["gender"], string> = {
-  male: "남자",
-  female: "여자",
+  male: "남성",
+  female: "여성",
   other: "기타",
 };
 
@@ -272,8 +268,11 @@ function SubmissionBody({ detail }: { detail: SubmissionDetail }) {
           <h1 className="text-[26px] font-bold tracking-[-0.02em]">
             {self_info.nickname}
           </h1>
-          <span className="rounded-md bg-secondary px-2.5 py-1 font-mono text-[14px] font-bold tracking-wider text-primary">
-            {type_result.code}
+          <span className="rounded-md bg-secondary px-2.5 py-1 text-[14px] font-bold text-primary">
+            {getCityType(type_result.code).nickname}
+          </span>
+          <span className="text-[13px] text-muted-foreground">
+            {spellCode(type_result.code)}
           </span>
         </div>
         <p className="mt-1.5 text-[14px] text-muted-foreground">
@@ -314,7 +313,7 @@ function SubmissionBody({ detail }: { detail: SubmissionDetail }) {
 
       {report.participation_notes.length > 0 && (
         <section className="space-y-4">
-          <SectionTitle label="개인 보고서" title="조사 신뢰와 참여 조건" />
+          <SectionTitle label="개인 보고서" title="조사에 관해 남긴 의견" />
           <ul className="space-y-2 rounded-2xl bg-card p-5">
             {report.participation_notes.map((note) => (
               <li
@@ -322,7 +321,7 @@ function SubmissionBody({ detail }: { detail: SubmissionDetail }) {
                 className="text-[14px] leading-6"
               >
                 <span className="mr-2 font-mono text-[12px] text-muted-foreground">
-                  턴 {note.turn}
+                  {note.turn}번째 발화
                 </span>
                 {note.text}
               </li>
@@ -332,7 +331,7 @@ function SubmissionBody({ detail }: { detail: SubmissionDetail }) {
       )}
 
       <section className="space-y-4">
-        <SectionTitle label="유형 결과" title="축별 판정과 증거" />
+        <SectionTitle label="도시유형 결과" title="축별 판정과 증거" />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {type_result.axes.map((axis) => (
             <TypeResultCard axis={axis} key={axis.axis} />
@@ -341,7 +340,7 @@ function SubmissionBody({ detail }: { detail: SubmissionDetail }) {
       </section>
 
       <section className="space-y-4">
-        <SectionTitle label="원본 대화록" title="참여자와 AI의 전체 대화" />
+        <SectionTitle label="원본 대화록" title="바다와 나눈 전체 대화" />
         <div className="rounded-2xl bg-card px-5">
           {raw_transcript.map((message, index) => (
             <TranscriptRow key={index} message={message} />

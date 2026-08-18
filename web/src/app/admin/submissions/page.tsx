@@ -6,6 +6,7 @@ import { ChevronRight } from "lucide-react";
 import { Dialog } from "@base-ui/react/dialog";
 
 import { Button } from "@/components/ui/button";
+import { getCityType } from "@/lib/city-types";
 import { formatDateTime } from "@/lib/format";
 import {
   deleteSubmission,
@@ -90,7 +91,7 @@ export default function SubmissionsList() {
       setSelected(new Set());
       load();
     } catch {
-      setMessage("삭제하지 못했습니다.");
+      setMessage("삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setDeleting(false);
     }
@@ -101,9 +102,6 @@ export default function SubmissionsList() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-[26px] font-bold tracking-[-0.02em]">제출본</h1>
-          <p className="mt-1.5 text-[14px] text-muted-foreground">
-            참여자가 제출한 인터뷰 결과를 확인합니다.
-          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {deleteMode && (
@@ -128,7 +126,7 @@ export default function SubmissionsList() {
             size="sm"
             variant={deleteMode ? "secondary" : "ghost"}
           >
-            {deleteMode ? "삭제 모드 끄기" : "삭제 모드"}
+            {deleteMode ? "선택 취소" : "선택 삭제"}
           </Button>
           <Button
             className="rounded-xl text-[13px] text-muted-foreground/80"
@@ -150,12 +148,12 @@ export default function SubmissionsList() {
         )}
         {state.status === "error" && (
           <p className="rounded-2xl bg-card px-5 py-8 text-center text-[14px] text-muted-foreground">
-            제출본을 불러오지 못했습니다.
+            제출본을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.
           </p>
         )}
         {state.status === "ready" && state.submissions.length === 0 && (
           <p className="rounded-2xl bg-card px-5 py-12 text-center text-[14px] text-muted-foreground">
-            아직 제출된 인터뷰가 없습니다.
+            아직 제출본이 없습니다.
           </p>
         )}
         {state.status === "ready" && state.submissions.length > 0 && (
@@ -174,8 +172,8 @@ export default function SubmissionsList() {
                       <span className="truncate text-[16px] font-bold">
                         {item.nickname}
                       </span>
-                      <span className="shrink-0 rounded-md bg-secondary px-2 py-0.5 font-mono text-[12px] font-bold tracking-wider text-primary">
-                        {item.type_code}
+                      <span className="shrink-0 rounded-md bg-secondary px-2 py-0.5 text-[12px] font-bold text-primary">
+                        {getCityType(item.type_code).nickname}
                       </span>
                     </div>
                     <p className="mt-1 truncate text-[13px] text-muted-foreground">
@@ -216,14 +214,14 @@ export default function SubmissionsList() {
           <Dialog.Backdrop className="fixed inset-0 z-50 bg-foreground/35" />
           <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 w-[min(440px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-popover p-7 shadow-[0_18px_60px_rgba(23,25,26,0.18)]">
             <Dialog.Title className="text-[20px] font-bold tracking-[-0.02em]">
-              제출본 {selected.size}건을 지울까요?
+              제출본 {selected.size}건을 삭제할까요?
             </Dialog.Title>
             <Dialog.Description className="mt-3 text-[14px] leading-6 text-muted-foreground">
-              유형 결과와 개인 보고서는 물론{" "}
+              유형 결과와 개인 보고서,{" "}
               <b className="font-bold text-foreground">
-                참여자가 나눈 원본 대화록까지 저장소에서 영원히 사라집니다.
+                참여자가 나눈 원본 대화록까지 모두 삭제됩니다.
               </b>{" "}
-              되돌릴 방법은 없습니다.
+              되돌릴 수 없습니다.
             </Dialog.Description>
             <form
               className="mt-6"
@@ -233,7 +231,7 @@ export default function SubmissionsList() {
                 className="block text-[13px] font-bold"
                 htmlFor="delete-access-code"
               >
-                접근 코드를 다시 입력해 주세요
+                접근 코드를 입력해 주세요
               </label>
               <input
                 aria-describedby={
@@ -270,7 +268,7 @@ export default function SubmissionsList() {
                   disabled={deleting || code === ""}
                   type="submit"
                 >
-                  {deleting ? "지우는 중" : "영구 삭제"}
+                  {deleting ? "삭제 중" : "영구 삭제"}
                 </Button>
               </div>
             </form>
