@@ -16,6 +16,7 @@ AXIS_HINT_TOPICS = {
     "OW": "도시가 무엇을 먼저 챙기기를 바라는지",
     "FH": "도시가 변할 때 무엇을 지키고 무엇을 바꾸기를 바라는지",
 }
+PacingMode = Literal["continue", "extend", "closing"]
 
 
 @lru_cache(maxsize=1)
@@ -78,35 +79,47 @@ def build_opening_instruction() -> str:
 
 
 def build_operational_instruction(
-    turn: int,
-    wrapup_turn: int,
+    mode: PacingMode,
     hint_topic: str | None = None,
+    retry: bool = False,
 ) -> str:
     """Build one pacing and optional coverage instruction block."""
-    if turn >= wrapup_turn:
+    if mode == "closing":
         instructions = [_BEGIN_CLOSING]
         if hint_topic:
             instructions.append(
-                "덧붙임을 물을 때 다음 성질의 이야기를 오늘 거의 못 들었다고 언급하고 "
+                "덧붙임을 물을 때 다음 성질의 이야기를 좀 더 듣고 싶다고 언급하고 "
                 f"그쪽도 열어 둘 것: {hint_topic}"
             )
         return _format_operational_instruction(instructions)
 
     instructions = [_KEEP_GOING]
     if hint_topic:
-        instructions.append(
-            "이번 응답에서는 다음 성질이 드러날 장면을 하나 물어볼 것"
-            f"(이미 그 이야기가 나왔다면 따르지 않아도 됨): {hint_topic}"
-        )
+        if retry:
+            instructions.append(
+                "다음 성질의 이야기를 앞서 물었으나 아직 나오지 않았음. 앞선 대화 맥락을 고려하여, "
+                "앞서 쓴 장면을 되풀이하지 말고 참여자가 이미 꺼낸 소재에 붙여 "
+                f"다른 장면으로 물을 것: {hint_topic}"
+            )
+        elif mode == "extend":
+            instructions.append(
+                "다음 성질의 이야기를 오늘 거의 듣지 못했음. 이번 응답에서는 그 성질이 드러날 "
+                f"2040년의 장면을 하나 골라 물을 것: {hint_topic}"
+            )
+        else:
+            instructions.append(
+                "이번 응답에서는 다음 성질이 드러날 장면을 하나 물어볼 것"
+                f"(이미 그 이야기가 나왔다면 따르지 않아도 됨): {hint_topic}"
+            )
     return _format_operational_instruction(instructions)
 
 
 def append_operational_instruction(
     text: str,
-    turn: int,
-    wrapup_turn: int,
+    mode: PacingMode,
     hint_topic: str | None = None,
+    retry: bool = False,
 ) -> str:
     """Append backend guidance after every participant utterance."""
-    instruction = build_operational_instruction(turn, wrapup_turn, hint_topic)
+    instruction = build_operational_instruction(mode, hint_topic, retry)
     return f"{text}\n{instruction}"

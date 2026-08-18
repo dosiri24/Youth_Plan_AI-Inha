@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,19 @@ from app.logging import configure_logging, log_event
 configure_logging()
 
 PROTECTED_PATH_PREFIXES = ("/api/dev/", "/api/admin/")
+ACTIVITY_TYPES = (
+    "visit_participant",
+    "visit_admin",
+    "interview_start",
+    "submission",
+)
+KST = ZoneInfo("Asia/Seoul")
+
+
+class VisitRequest(BaseModel):
+    """Represent one public page visit event."""
+
+    page: Literal["participant", "admin"]
 
 
 class CreateSessionRequest(BaseModel):
@@ -123,11 +137,22 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.post("/api/visits", status_code=status.HTTP_204_NO_CONTENT)
+def record_visit(visit: VisitRequest, request: Request) -> Response:
+    """Record one public participant or admin page visit."""
+    _record_activity(f"visit_{visit.page}", request)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.post("/api/sessions", response_model=CreateSessionResponse)
-def create_interview(request: CreateSessionRequest) -> CreateSessionResponse:
+def create_interview(
+    session_request: CreateSessionRequest,
+    request: Request,
+) -> CreateSessionResponse:
     """Create one active in-memory interview session."""
-    current = session.create_session(request.birth_year, request.gender)
+    current = session.create_session(session_request.birth_year, session_request.gender)
     log_event("session_created", session_id=current["session_id"])
+    _record_activity("interview_start", request)
     return CreateSessionResponse(session_id=current["session_id"])
 
 
@@ -223,6 +248,7 @@ async def revise_result(
 def submit_result(
     session_id: str,
     background_tasks: BackgroundTasks,
+    request: Request,
 ) -> SubmissionResponse:
     """Leave a single persistence insertion point before memory is discarded."""
     current = _find_session(session_id)
@@ -243,6 +269,7 @@ def submit_result(
     )
     session.discard_session(session_id)
     log_event("submitted", session_id=session_id, submission_id=submission_id)
+    _record_activity("submission", request)
     return SubmissionResponse(submission_id=submission_id)
 
 
@@ -252,6 +279,29 @@ def list_submissions() -> list[dict[str, object]]:
     summaries = [_submission_summary(document) for document in store.get_store().list()]
     summaries.sort(key=lambda item: item["submitted_at"], reverse=True)
     return summaries
+
+
+@app.get("/api/admin/activity")
+def get_activity() -> dict[str, object]:
+    """Return activity totals and newest-first event details."""
+    totals = _empty_activity_counts()
+    events: list[dict[str, str]] = []
+    for document in store.get_activity_store().list():
+        event_type = document["type"]
+        totals[event_type] += 1
+        agent = document.get("agent", "")
+        events.append(
+            {
+                "ts": datetime.fromisoformat(document["ts"]).astimezone(KST).isoformat(),
+                "type": event_type,
+                "ip": document.get("ip", ""),
+                "device": _device_label(agent),
+                "browser": _browser_label(agent),
+            }
+        )
+    events.sort(key=lambda event: event["ts"], reverse=True)
+
+    return {"totals": totals, "events": events}
 
 
 @app.get("/api/admin/submissions/{submission_id}")
@@ -315,6 +365,73 @@ def _submission_document(current: session.Session) -> store.Document:
         "report": current["report"],
         "deidentified": None,
     }
+
+
+def _record_activity(event_type: str, request: Request) -> None:
+    """Keep auxiliary activity persistence failures out of primary requests."""
+    try:
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if forwarded_for is not None:
+            ip = forwarded_for.split(",", 1)[0].strip()
+        elif request.client:
+            ip = request.client.host
+        else:
+            ip = ""
+        store.get_activity_store().record(
+            event_type,
+            _mask_ip(ip),
+            request.headers.get("user-agent", ""),
+        )
+    except Exception as exc:
+        log_event("activity_record_failed", reason=type(exc).__name__)
+
+
+def _mask_ip(ip: str) -> str:
+    """Mask supported client IP forms before persistence."""
+    if ip.count(".") == 3:
+        return f"{ip.rsplit('.', 1)[0]}.*"
+    if ":" in ip:
+        return f"{':'.join(ip.split(':')[:4])}:*"
+    return ""
+
+
+def _device_label(agent: str) -> str:
+    """Classify a user agent into a short device label."""
+    if not agent:
+        return ""
+    if "iPhone" in agent:
+        return "iPhone"
+    if "iPad" in agent:
+        return "iPad"
+    if "Android" in agent:
+        return "Android"
+    if "Windows" in agent:
+        return "Windows"
+    if "Macintosh" in agent:
+        return "Mac"
+    return "기타"
+
+
+def _browser_label(agent: str) -> str:
+    """Classify a user agent into a short browser label."""
+    if not agent:
+        return ""
+    if "SamsungBrowser" in agent:
+        return "삼성인터넷"
+    if "Edg" in agent:
+        return "Edge"
+    if "Chrome" in agent:
+        return "Chrome"
+    if "Firefox" in agent:
+        return "Firefox"
+    if "Safari" in agent:
+        return "Safari"
+    return "기타"
+
+
+def _empty_activity_counts() -> dict[str, int]:
+    """Build a zero-filled counter for every exposed activity type."""
+    return dict.fromkeys(ACTIVITY_TYPES, 0)
 
 
 def _submission_summary(document: store.Document) -> dict[str, object]:

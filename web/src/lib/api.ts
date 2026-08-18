@@ -248,6 +248,19 @@ async function* openStream(
   yield* readEvents(response);
 }
 
+export type VisitPage = "participant" | "admin";
+
+/** Fire-and-forget: a lost visit ping must never affect the screen flow. */
+export function recordVisit(page: VisitPage): void {
+  void call("/api/visits", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ page }),
+  }).catch(() => {});
+}
+
 /** The client intentionally retains only a volatile session identifier. */
 export async function createSession(
   birthYear: number,
@@ -558,6 +571,35 @@ export type AnalysisRun = {
   briefing?: Briefing | null;
   quotes?: BriefingQuote[];
 };
+
+export type ActivityTotals = {
+  visit_participant: number;
+  visit_admin: number;
+  interview_start: number;
+  submission: number;
+};
+
+export type ActivityEvent = {
+  /** KST ISO 8601, so the screen can slice it without a timezone conversion. */
+  ts: string;
+  type: keyof ActivityTotals;
+  ip: string;
+  device: string;
+  browser: string;
+};
+
+export type ActivityResponse = {
+  totals: ActivityTotals;
+  /** Newest first, as the backend orders it. */
+  events: ActivityEvent[];
+};
+
+/** Cumulative counts plus the full access log for the admin activity screen. */
+export async function getActivity(): Promise<ActivityResponse> {
+  const response = await request("/api/admin/activity", { method: "GET" });
+
+  return (await response.json()) as ActivityResponse;
+}
 
 /** The admin table reads store summaries without loading full transcripts. */
 export async function listSubmissions(): Promise<SubmissionSummary[]> {

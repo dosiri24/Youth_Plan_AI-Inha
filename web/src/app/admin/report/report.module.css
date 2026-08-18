@@ -402,6 +402,7 @@
    map. Narrower than the map, so the coastline still shows on both sides. */
 .voicelayer {
   position: absolute;
+  z-index: 1;
   left: 50%;
   top: 47%;
   transform: translate(-50%, -50%);

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from datetime import UTC, datetime
 from typing import Any
 
 from google.cloud.firestore_v1 import Query
@@ -39,6 +40,18 @@ class AnalysisStore(ABC):
     @abstractmethod
     def latest(self) -> Document | None:
         """Return the most recently saved analysis document or None."""
+
+
+class ActivityStore(ABC):
+    """Define the activity-event persistence contract shared across backends."""
+
+    @abstractmethod
+    def record(self, event_type: str, ip: str, agent: str) -> None:
+        """Persist one timestamped activity event."""
+
+    @abstractmethod
+    def list(self) -> list[Document]:
+        """Return every stored activity event."""
 
 
 class InMemorySubmissionStore(SubmissionStore):
@@ -101,6 +114,29 @@ class InMemoryAnalysisStore(AnalysisStore):
         return {**document, "run_id": run_id}
 
 
+class InMemoryActivityStore(ActivityStore):
+    """Hold activity events in memory when no GCP project is configured."""
+
+    def __init__(self) -> None:
+        """Start with an empty activity event list."""
+        self._documents: list[Document] = []
+
+    def record(self, event_type: str, ip: str, agent: str) -> None:
+        """Append one activity event with a UTC ISO 8601 timestamp."""
+        self._documents.append(
+            {
+                "type": event_type,
+                "ts": datetime.now(UTC).isoformat(),
+                "ip": ip,
+                "agent": agent,
+            }
+        )
+
+    def list(self) -> list[Document]:
+        """Return copies of all recorded activity events."""
+        return [dict(document) for document in self._documents]
+
+
 class FirestoreSubmissionStore(SubmissionStore):
     """Persist submissions in the contracted Firestore collection."""
 
@@ -155,8 +191,28 @@ class FirestoreAnalysisStore(AnalysisStore):
         return {**snapshot.to_dict(), "run_id": snapshot.id}
 
 
+class FirestoreActivityStore(ActivityStore):
+    """Persist activity events in the contracted Firestore collection."""
+
+    def record(self, event_type: str, ip: str, agent: str) -> None:
+        """Store one activity event under an automatically generated document id."""
+        get_client().collection("activity").document().set(
+            {
+                "type": event_type,
+                "ts": datetime.now(UTC).isoformat(),
+                "ip": ip,
+                "agent": agent,
+            }
+        )
+
+    def list(self) -> list[Document]:
+        """Return every Firestore activity event."""
+        return [{**snapshot.to_dict()} for snapshot in get_client().collection("activity").stream()]
+
+
 _store: SubmissionStore | None = None
 _analysis_store: AnalysisStore | None = None
+_activity_store: ActivityStore | None = None
 
 
 def get_store() -> SubmissionStore:
@@ -179,3 +235,14 @@ def get_analysis_store() -> AnalysisStore:
         else:
             _analysis_store = InMemoryAnalysisStore()
     return _analysis_store
+
+
+def get_activity_store() -> ActivityStore:
+    """Return the active activity event store."""
+    global _activity_store
+    if _activity_store is None:
+        if get_settings().gcp_project_id:
+            _activity_store = FirestoreActivityStore()
+        else:
+            _activity_store = InMemoryActivityStore()
+    return _activity_store

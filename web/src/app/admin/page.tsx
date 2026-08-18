@@ -267,6 +267,9 @@ export default function Dashboard() {
           >
             제출본 목록
           </Link>
+          <Link className={`${styles.btn} ${styles.g}`} href="/admin/activity">
+            접속 현황
+          </Link>
           <button
             className={`${styles.btn} ${styles.g}`}
             disabled={!people?.length}

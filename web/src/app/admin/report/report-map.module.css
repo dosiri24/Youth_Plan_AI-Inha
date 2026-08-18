@@ -110,9 +110,13 @@
   color: var(--r-ink3);
 }
 
+/* Its own stacking context, so the dots' z-indexes stay a contest among dots.
+   Without it the spotlight dot climbed out of the map and printed over the
+   quote card laid on top of it. */
 .layer {
   position: absolute;
   inset: 0;
+  z-index: 0;
 }
 
 .dot {

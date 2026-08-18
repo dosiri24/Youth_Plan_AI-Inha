@@ -99,8 +99,9 @@ class StructuredReport(StrictModel):
 
 
 class RevisedDemands(StrictModel):
-    """Accept only one complete ordered replacement of all axis demands."""
+    """Accept one regenerated summary and complete ordered demand replacement."""
 
+    summary: Annotated[list[Sentence], Field(min_length=1)]
     axis_demands: Annotated[list[StructuredAxis], Field(min_length=4, max_length=4)]
 
     @model_validator(mode="after")
@@ -267,7 +268,7 @@ async def revise(
     selections: list[SelectedSentence],
     comment: str,
 ) -> tuple[PersonalReport, TokenUsage]:
-    """Limit revision effects to one complete replacement of all demands."""
+    """Replace the summary and all demands while preserving backend-owned fields."""
     current_report = current["report"]
     type_result = current["type_result"]
     if current_report is None or type_result is None:
@@ -297,7 +298,7 @@ async def revise(
     revised: PersonalReport = {
         "session_id": current_report["session_id"],
         "self_info": copy.deepcopy(current_report["self_info"]),
-        "summary": list(current_report["summary"]),
+        "summary": list(structured.summary),
         "axis_reasons": copy.deepcopy(current_report["axis_reasons"]),
         "axis_demands": _axis_demands(structured, type_result),
         "participation_notes": copy.deepcopy(current_report["participation_notes"]),

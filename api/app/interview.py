@@ -6,7 +6,7 @@ from contextlib import suppress
 from google.genai import types
 
 from app import claude, gemini, knowledge, prompts, session, tagging
-from app.axes import Evidence
+from app.axes import AXIS_NAMES, Evidence
 from app.config import Settings, get_settings
 from app.lexicon import (
     ANSWER_DEMANDS,
@@ -41,7 +41,9 @@ async def _run(
 ) -> AsyncIterator[str]:
     """Execute one interview turn and emit participant-safe SSE events."""
     settings = get_settings()
-    hint_topic = _axis_hint(current, turn, settings) if user_text is not None else None
+    mode, hint_topic, retry = (
+        _pacing(current, turn, settings) if user_text is not None else ("continue", None, False)
+    )
     scoring_task = _start_scoring(current, user_text, turn)
     try:
         parser = TrailerParser()
@@ -51,9 +53,10 @@ async def _run(
         async for text, current_usage in _text_stream(
             current,
             user_text,
-            turn,
             settings,
+            mode,
             hint_topic,
+            retry,
         ):
             if current_usage is not None:
                 token_usage = current_usage
@@ -100,7 +103,7 @@ async def _run(
         )
         _save_turn(current, turn, user_text, assistant_text, evidence)
 
-        ended = result.ended and _may_end(turn, user_text, assistant_text, settings)
+        ended = result.ended and _may_end(mode, user_text, assistant_text)
         if result.ended and not ended:
             log_event("termination_withheld", session_id=current["session_id"], turn=turn)
         if ended:
@@ -129,67 +132,105 @@ async def _run(
             scoring_task.cancel()
 
 
-def _axis_hint(current: session.Session, turn: int, settings: Settings) -> str | None:
-    """Select the next uncovered axis topic for hint or closing guidance."""
-    closing = turn >= settings.interview_wrapup_turn
-    if not closing and turn < settings.interview_hint_turn:
-        return None
-
+def _pacing(
+    current: session.Session,
+    turn: int,
+    settings: Settings,
+) -> tuple[prompts.PacingMode, str | None, bool]:
+    """Choose one pacing mode and any uncovered-axis guidance for this turn."""
     covered = {item["axis"] for item in current["evidence_log"]}
-    for axis in ("AC", "UN", "OW", "FH"):
-        if axis in covered:
-            continue
-        if closing:
-            log_event(
-                "axis_hint",
-                session_id=current["session_id"],
-                turn=turn,
-                axis=axis,
-                closing=True,
-            )
-            return prompts.AXIS_HINT_TOPICS[axis]
+    uncovered = [axis for axis in AXIS_NAMES if axis not in covered]
+    extension_limit = settings.interview_wrapup_turn + settings.interview_max_extra_turns
+    if turn < settings.interview_wrapup_turn:
+        mode: prompts.PacingMode = "continue"
+    elif uncovered and turn < extension_limit:
+        mode = "extend"
+    else:
+        mode = "closing"
 
-        attempts = current["axis_hints"].get(axis, [])
-        if len(attempts) >= 2:
-            continue
-        # Tagging sees the prompted answer next turn, so wait before retrying.
-        if attempts and attempts[-1] > turn - 2:
-            continue
-        attempts.append(turn)
-        current["axis_hints"][axis] = attempts
+    if mode == "closing":
+        if not uncovered:
+            return mode, None, False
+        axis = uncovered[0]
         log_event(
             "axis_hint",
             session_id=current["session_id"],
             turn=turn,
             axis=axis,
-            attempt=len(attempts),
+            closing=True,
+            mode=mode,
         )
-        return prompts.AXIS_HINT_TOPICS[axis]
-    return None
+        return mode, prompts.AXIS_HINT_TOPICS[axis], False
+
+    if mode == "continue" and turn < settings.interview_hint_turn:
+        return mode, None, False
+
+    axis_order = {axis: index for index, axis in enumerate(AXIS_NAMES)}
+    ordered = sorted(
+        uncovered,
+        key=lambda axis: (len(current["axis_hints"].get(axis, [])), axis_order[axis]),
+    )
+    eligible = []
+    for axis in ordered:
+        attempts = current["axis_hints"].get(axis, [])
+        if mode == "continue" and len(attempts) >= 2:
+            continue
+        # Tagging sees the prompted answer next turn, so wait before retrying.
+        if attempts and attempts[-1] > turn - 2:
+            continue
+        eligible.append(axis)
+
+    if mode == "extend":
+        deferred_axis = eligible[0] if eligible else ordered[0]
+        log_event(
+            "wrapup_deferred",
+            session_id=current["session_id"],
+            turn=turn,
+            axis=deferred_axis,
+        )
+    if not eligible:
+        return mode, None, False
+
+    axis = eligible[0]
+    attempts = current["axis_hints"].get(axis, [])
+    retry = bool(attempts)
+    attempts.append(turn)
+    current["axis_hints"][axis] = attempts
+    log_event(
+        "axis_hint",
+        session_id=current["session_id"],
+        turn=turn,
+        axis=axis,
+        attempt=len(attempts),
+        mode=mode,
+    )
+    return mode, prompts.AXIS_HINT_TOPICS[axis], retry
 
 
 def _text_stream(
     current: session.Session,
     user_text: str | None,
-    turn: int,
     settings: Settings,
+    mode: prompts.PacingMode,
     hint_topic: str | None,
+    retry: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Select the configured interviewer text stream."""
     if settings.interview_provider == "claude":
-        return _claude_text_stream(current, user_text, turn, settings, hint_topic)
-    return _gemini_text_stream(current, user_text, turn, settings, hint_topic)
+        return _claude_text_stream(current, user_text, settings, mode, hint_topic, retry)
+    return _gemini_text_stream(current, user_text, settings, mode, hint_topic, retry)
 
 
 async def _gemini_text_stream(
     current: session.Session,
     user_text: str | None,
-    turn: int,
     settings: Settings,
+    mode: prompts.PacingMode,
     hint_topic: str | None,
+    retry: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Yield Gemini interviewer text and usage updates."""
-    contents = _build_contents(current, user_text, turn, hint_topic)
+    contents = _build_contents(current, user_text, mode, hint_topic, retry)
     tool = knowledge.file_search_tool()
     config = types.GenerateContentConfig(
         system_instruction=prompts.build_fixed_prefix(current["age_2040"]),
@@ -212,9 +253,10 @@ async def _gemini_text_stream(
 async def _claude_text_stream(
     current: session.Session,
     user_text: str | None,
-    turn: int,
     settings: Settings,
+    mode: prompts.PacingMode,
     hint_topic: str | None,
+    retry: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Yield Claude interviewer text and final usage."""
     if settings.file_search_store_name:
@@ -230,7 +272,7 @@ async def _claude_text_stream(
                 "cache_control": {"type": "ephemeral"},
             }
         ],
-        messages=_build_claude_messages(current, user_text, turn, settings, hint_topic),
+        messages=_build_claude_messages(current, user_text, mode, hint_topic, retry),
     ) as stream:
         async for text in stream.text_stream:
             yield text, None
@@ -249,9 +291,9 @@ def _claude_thinking(model: str) -> dict[str, str | int]:
 def _build_claude_messages(
     current: session.Session,
     user_text: str | None,
-    turn: int,
-    settings: Settings,
+    mode: prompts.PacingMode,
     hint_topic: str | None = None,
+    retry: bool = False,
 ) -> list[dict[str, str]]:
     """Build text-only Claude messages with the current instruction last."""
     messages = [
@@ -266,9 +308,9 @@ def _build_claude_messages(
         if user_text is None
         else prompts.append_operational_instruction(
             user_text,
-            turn,
-            settings.interview_wrapup_turn,
+            mode,
             hint_topic,
+            retry,
         )
     )
     messages.append({"role": "user", "content": text})
@@ -278,8 +320,9 @@ def _build_claude_messages(
 def _build_contents(
     current: session.Session,
     user_text: str | None,
-    turn: int,
+    mode: prompts.PacingMode,
     hint_topic: str | None = None,
+    retry: bool = False,
 ) -> list[types.Content]:
     """Build full conversation contents with the current utterance and its instruction last."""
     contents = [
@@ -292,12 +335,11 @@ def _build_contents(
         contents.append(_content("user", prompts.build_opening_instruction()))
         return contents
 
-    settings = get_settings()
     assembled = prompts.append_operational_instruction(
         user_text,
-        turn,
-        settings.interview_wrapup_turn,
+        mode,
         hint_topic,
+        retry,
     )
     contents.append(_content("user", assembled))
     return contents
@@ -324,15 +366,14 @@ def _save_turn(
 
 
 def _may_end(
-    turn: int,
+    mode: prompts.PacingMode,
     user_text: str | None,
     assistant_text: str,
-    settings: Settings,
 ) -> bool:
     """Decide whether this session has earned the right to close on this turn."""
     if user_text is not None and _matches(user_text, STOP_MARKS):
         return True
-    return turn >= settings.interview_wrapup_turn and not _matches(assistant_text, ANSWER_DEMANDS)
+    return mode == "closing" and not _matches(assistant_text, ANSWER_DEMANDS)
 
 
 def _matches(text: str, marks: tuple[str, ...]) -> bool:
@@ -360,7 +401,7 @@ def _progress(turn: int, state: str, settings: Settings) -> int:
         return 0
     if state == "ended":
         return 100
-    return int(min(turn / settings.interview_target_turns, 1) * 100)
+    return min(int(turn / settings.interview_target_turns * 100), 99)
 
 
 def _start_scoring(

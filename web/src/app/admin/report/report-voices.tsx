@@ -24,6 +24,11 @@ const CHARS_PER_SEC = 65;
 /** Steps in the sequence. Each one costs the reader most of a screen. */
 const MAX_STEPS = 5;
 
+/* A wheel stream is one gesture until it goes quiet: a trackpad swipe keeps
+   sending events at frame rate for as long as its momentum lasts, so a gap this
+   long is what separates one swipe from the next. */
+const GESTURE_GAP_MS = 170;
+
 /** Above this a quote reads as a paragraph rather than a line over the map. */
 const COMFORTABLE = 110;
 
@@ -163,6 +168,12 @@ export function VoiceScrolly({
   const [index, setIndex] = useState(0);
   const steps = useRef<(HTMLDivElement | null)[]>([]);
   const frame = useRef<HTMLDivElement>(null);
+  /* When the last scroll event of the current gesture arrived, and whether that
+     gesture may still take a district. One swipe buys one quote: its momentum
+     goes on firing for seconds afterwards, and answering that tail is how a
+     single swipe used to carry the reader through three of them. */
+  const gesture = useRef(0);
+  const armed = useRef(true);
   /* Quotes that have already been typed out once. Scrolling back to one should
      find the sentence whole, not watch it get written again. Held as state, not
      a ref, because the render decides from it. */
@@ -173,7 +184,19 @@ export function VoiceScrolly({
      a layout read on every wheel tick, and this document is twenty screens long;
      off-screen they come off entirely. */
   const [near, setNear] = useState(true);
-  const current = voices[index] ?? null;
+  /* The furthest quote the reader has earned: the first one not yet written out.
+     Which quote is showing cannot be read from the scroll position alone. The
+     opening events of a flick arrive non-cancelable — the browser has already
+     begun scrolling on the compositor by the time the handler sees them — so a
+     flick on a freshly loaded page moves several hundred pixels that nothing can
+     refuse, and the position alone would count the quote it crossed as read.
+     Under reduced motion nothing is typed, so nothing is gated either. */
+  const unwritten = voices.findIndex(
+    (voice) => !written.has(voice.quote.quote_id),
+  );
+  const gate = still || unwritten === -1 ? voices.length - 1 : unwritten;
+  const at = Math.min(index, gate);
+  const current = voices[at] ?? null;
   /* One trackpad flick covers a whole step, so without this a quote is gone
      before it has been read. */
   const typing =
@@ -213,9 +236,10 @@ export function VoiceScrolly({
     return () => observer.disconnect();
   }, [voices.length]);
 
-  /* Two rules govern going forward while the sequence holds the screen. A
-     sentence still arriving refuses the gesture outright, and any gesture is
-     capped at one district — otherwise one flick of a trackpad carries the
+  /* Three rules govern going forward while the sequence holds the screen. A
+     sentence still arriving keeps the reader at its own quote, one gesture buys
+     one district, and a gesture that has spent its district is refused for as
+     long as it keeps firing — otherwise a single swipe of a trackpad carries the
      reader past four of them and out the bottom. Going back, the skip control,
      the keyboard and the scrollbar all stay free: this can hold a reader for a
      moment but must never trap one. */
@@ -224,11 +248,16 @@ export function VoiceScrolly({
     const box = frame.current;
     if (scroller === null || box === null || !near) return;
 
-    /* The sequence holds the screen: the map is stuck and a quote is being read.
-       Only then can a sentence refuse a gesture. */
-    const engaged = () => {
-      const rect = box.getBoundingClientRect();
-      return rect.top <= 1 && rect.bottom >= window.innerHeight * 0.6;
+    /* Where a step sits once it is centred in the viewport, which is where its
+       quote is the one being read. */
+    const centreOf = (position: number): number | null => {
+      const step = steps.current[position] ?? null;
+      if (step === null) return null;
+      const rect = step.getBoundingClientRect();
+
+      return (
+        scroller.scrollTop + rect.top + rect.height / 2 - window.innerHeight / 2
+      );
     };
 
     /* The nearest step centre still ahead of us. Using the next one ahead rather
@@ -237,12 +266,9 @@ export function VoiceScrolly({
        single gesture. Null once every step is behind, so the last quote never
        blocks the way out. */
     const stopAt = (): number | null => {
-      const middle = window.innerHeight / 2;
-      for (const step of steps.current) {
-        if (step === null) continue;
-        const rect = step.getBoundingClientRect();
-        const centre = scroller.scrollTop + rect.top + rect.height / 2 - middle;
-        if (centre > scroller.scrollTop + 2) return centre;
+      for (let position = 0; position < steps.current.length; position += 1) {
+        const centre = centreOf(position);
+        if (centre !== null && centre > scroller.scrollTop + 2) return centre;
       }
 
       return null;
@@ -252,25 +278,67 @@ export function VoiceScrolly({
       if (delta <= 0) return false;
       const rect = box.getBoundingClientRect();
       if (rect.bottom <= 0 || rect.top >= window.innerHeight) return false;
-      if (typing && engaged()) {
+
+      /* This gesture has already had its district. Everything left of it —
+         momentum included — is refused until the hand comes off and a new one
+         starts. */
+      if (!armed.current) {
         event.preventDefault();
         return true;
       }
+
+      /* A sentence still arriving stops the reader at its own quote, wherever
+         the gesture came from. Tying this to the stage being stuck at the top
+         was the hole: a flick that started well above the sequence never met
+         that condition, so it cleared every quote before any of them had been
+         written. Anything short of this quote's place still passes, so coming
+         down to it stays a scroll and not a snap. */
+      if (typing) {
+        const here = centreOf(at);
+        if (here === null || scroller.scrollTop + delta <= here) return false;
+        event.preventDefault();
+        /* Also comes back to the quote when the unstoppable head of a flick has
+           already carried the page past it. Only from within a screen of it:
+           further out the reader has left the sequence some other way, and
+           hauling them back would be a trap rather than a beat. */
+        if (
+          Math.abs(scroller.scrollTop - here) > 2 &&
+          scroller.scrollTop - here < window.innerHeight
+        ) {
+          armed.current = false;
+          scroller.scrollTo({ top: here, behavior: "smooth" });
+        }
+
+        return true;
+      }
+
       const limit = stopAt();
       if (limit === null || scroller.scrollTop + delta <= limit) return false;
       event.preventDefault();
+      armed.current = false;
       scroller.scrollTo({ top: limit, behavior: "smooth" });
 
       return true;
     };
 
-    const onWheel = (event: WheelEvent) => forward(event, event.deltaY);
+    /* A gap in the stream is a hand leaving the trackpad, which is the only
+       thing that buys the next district. */
+    const onWheel = (event: WheelEvent) => {
+      const now = performance.now();
+      if (now - gesture.current > GESTURE_GAP_MS) armed.current = true;
+      gesture.current = now;
+      forward(event, event.deltaY);
+    };
     let touch = 0;
     const onStart = (event: TouchEvent) => {
       touch = event.touches[0]?.clientY ?? 0;
+      gesture.current = performance.now();
+      armed.current = true;
     };
-    const onMove = (event: TouchEvent) =>
+    const onMove = (event: TouchEvent) => {
+      gesture.current = performance.now();
       forward(event, touch - (event.touches[0]?.clientY ?? touch));
+    };
 
     scroller.addEventListener("wheel", onWheel, { passive: false });
     scroller.addEventListener("touchstart", onStart, { passive: true });
@@ -296,7 +364,7 @@ export function VoiceScrolly({
       scroller.removeEventListener("touchstart", onStart);
       scroller.removeEventListener("touchmove", onMove);
     };
-  }, [current, index, near, typing]);
+  }, [at, current, near, typing]);
 
   if (current === null) return null;
 

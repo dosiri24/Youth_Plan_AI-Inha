@@ -6,6 +6,7 @@ import { InterviewScreen } from "@/components/interview-screen";
 import { MobileShell } from "@/components/mobile-shell";
 import { ResultScreen } from "@/components/result-screen";
 import { Button } from "@/components/ui/button";
+import { VisitPing } from "@/components/visit-ping";
 import { createSession, type Gender } from "@/lib/api";
 
 type Screen =
@@ -68,6 +69,7 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-card px-6 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-7">
+      <VisitPing page="participant" />
       <div className="flex-1">
         <p className="text-[15px] font-bold text-primary">유스플랜AI</p>
         <h1 className="mt-3 text-[29px] leading-[1.28] font-bold tracking-[-0.035em]">
