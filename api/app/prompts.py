@@ -8,6 +8,10 @@ _PROMPT_DIR = Path(__file__).resolve().parents[1] / "prompts"
 _INTERVIEW_PROMPT_NAMES = ("system.md", "rubric.md")
 _FINGERPRINT_LENGTH = 12
 _KEEP_GOING = "아직 인터뷰를 마무리하지 말고 대화를 계속할 것"
+_BEGIN_FUTURE = (
+    "지금의 하루 이야기는 충분히 들었으니 이번 응답에서 2040년의 하루로 넘어가는 전환을 시작할 것"
+    "(이미 2040년 이야기를 나누고 있다면 따르지 않아도 됨)"
+)
 _BEGIN_CLOSING = "인터뷰 루브릭에 설명된 정리 순서로 넘어갈 것"
 # Topics quote the rubric's four target qualities, so the interviewer maps them without axis names.
 AXIS_HINT_TOPICS = {
@@ -82,6 +86,7 @@ def build_operational_instruction(
     mode: PacingMode,
     hint_topic: str | None = None,
     retry: bool = False,
+    future: bool = False,
 ) -> str:
     """Build one pacing and optional coverage instruction block."""
     if mode == "closing":
@@ -94,6 +99,8 @@ def build_operational_instruction(
         return _format_operational_instruction(instructions)
 
     instructions = [_KEEP_GOING]
+    if future:
+        instructions.append(_BEGIN_FUTURE)
     if hint_topic:
         if retry:
             instructions.append(
@@ -119,7 +126,8 @@ def append_operational_instruction(
     mode: PacingMode,
     hint_topic: str | None = None,
     retry: bool = False,
+    future: bool = False,
 ) -> str:
     """Append backend guidance after every participant utterance."""
-    instruction = build_operational_instruction(mode, hint_topic, retry)
+    instruction = build_operational_instruction(mode, hint_topic, retry, future)
     return f"{text}\n{instruction}"

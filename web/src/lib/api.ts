@@ -576,6 +576,7 @@ export type ActivityTotals = {
   visit_participant: number;
   visit_admin: number;
   interview_start: number;
+  result_view: number;
   submission: number;
 };
 

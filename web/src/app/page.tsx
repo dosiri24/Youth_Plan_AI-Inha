@@ -82,6 +82,9 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
           정리해요. 들려주신 이야기는 2040년 인천을 계획할 때 청년의 관점을
           반영하는 자료가 돼요.
         </p>
+        <p className="mt-3 text-[15px] leading-7 text-muted-foreground">
+          인천에 살고 있는 청년을 대상으로 하는 인터뷰예요.
+        </p>
         {/* The only place the duration is stated, so the interviewer never guesses it. */}
         <p className="mt-3 text-[15px] font-semibold text-incheon-green">
           인터뷰는 5~10분 정도 걸려요.

@@ -23,6 +23,7 @@ ACTIVITY_TYPES = (
     "visit_participant",
     "visit_admin",
     "interview_start",
+    "result_view",
     "submission",
 )
 KST = ZoneInfo("Asia/Seoul")
@@ -198,7 +199,7 @@ def undo_last_turn(session_id: str) -> Response:
 
 
 @app.post("/api/sessions/{session_id}/result")
-async def generate_result(session_id: str) -> dict[str, object]:
+async def generate_result(session_id: str, request: Request) -> dict[str, object]:
     """Keep deterministic scoring independent from report-track latency."""
     current = _find_session(session_id)
     if current["status"] != "ended":
@@ -215,6 +216,7 @@ async def generate_result(session_id: str) -> dict[str, object]:
         session_id=session_id,
         token_usage=draft.token_usage,
     )
+    _record_activity("result_view", request)
     return {
         "type_result": report.slim_type_result(type_result),
         "report": report.slim_report(personal_report),

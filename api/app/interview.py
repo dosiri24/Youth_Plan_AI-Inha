@@ -22,6 +22,10 @@ MALICIOUS_WARNING = (
 )
 MALICIOUS_ABORT = "같은 발화가 반복되어 인터뷰를 종료합니다."
 MALICIOUS_LIMIT = 2
+NON_RESIDENT_NOTICE = (
+    "아쉽지만 이 인터뷰는 인천에 살고 계신 분들을 대상으로 하고 있어요. "
+    "관심 가져 주셔서 감사합니다."
+)
 
 
 def start(current: session.Session) -> AsyncIterator[str]:
@@ -41,8 +45,10 @@ async def _run(
 ) -> AsyncIterator[str]:
     """Execute one interview turn and emit participant-safe SSE events."""
     settings = get_settings()
-    mode, hint_topic, retry = (
-        _pacing(current, turn, settings) if user_text is not None else ("continue", None, False)
+    mode, hint_topic, retry, future = (
+        _pacing(current, turn, settings)
+        if user_text is not None
+        else ("continue", None, False, False)
     )
     scoring_task = _start_scoring(current, user_text, turn)
     try:
@@ -57,6 +63,7 @@ async def _run(
             mode,
             hint_topic,
             retry,
+            future,
         ):
             if current_usage is not None:
                 token_usage = current_usage
@@ -71,6 +78,20 @@ async def _run(
             visible_parts.append(result.text)
             yield _sse("delta", {"text": result.text})
         assistant_text = "".join(visible_parts)
+
+        if result.non_resident:
+            yield _sse("delta", {"text": NON_RESIDENT_NOTICE})
+            if scoring_task is not None:
+                await _cancel_scoring(scoring_task, current["session_id"], turn)
+            log_event(
+                "non_resident",
+                session_id=current["session_id"],
+                token_usage=token_usage,
+                turn=turn,
+            )
+            session.discard_session(current["session_id"])
+            yield _sse("end", {"state": "aborted", "progress": 0})
+            return
 
         if result.malicious:
             current["malicious_count"] += 1
@@ -136,7 +157,7 @@ def _pacing(
     current: session.Session,
     turn: int,
     settings: Settings,
-) -> tuple[prompts.PacingMode, str | None, bool]:
+) -> tuple[prompts.PacingMode, str | None, bool, bool]:
     """Choose one pacing mode and any uncovered-axis guidance for this turn."""
     covered = {item["axis"] for item in current["evidence_log"]}
     uncovered = [axis for axis in AXIS_NAMES if axis not in covered]
@@ -147,10 +168,13 @@ def _pacing(
         mode = "extend"
     else:
         mode = "closing"
+    future = mode == "continue" and turn == settings.interview_future_turn
+    if future:
+        log_event("future_transition", session_id=current["session_id"], turn=turn)
 
     if mode == "closing":
         if not uncovered:
-            return mode, None, False
+            return mode, None, False, future
         axis = uncovered[0]
         log_event(
             "axis_hint",
@@ -160,10 +184,10 @@ def _pacing(
             closing=True,
             mode=mode,
         )
-        return mode, prompts.AXIS_HINT_TOPICS[axis], False
+        return mode, prompts.AXIS_HINT_TOPICS[axis], False, future
 
     if mode == "continue" and turn < settings.interview_hint_turn:
-        return mode, None, False
+        return mode, None, False, future
 
     axis_order = {axis: index for index, axis in enumerate(AXIS_NAMES)}
     ordered = sorted(
@@ -189,7 +213,7 @@ def _pacing(
             axis=deferred_axis,
         )
     if not eligible:
-        return mode, None, False
+        return mode, None, False, future
 
     axis = eligible[0]
     attempts = current["axis_hints"].get(axis, [])
@@ -204,7 +228,7 @@ def _pacing(
         attempt=len(attempts),
         mode=mode,
     )
-    return mode, prompts.AXIS_HINT_TOPICS[axis], retry
+    return mode, prompts.AXIS_HINT_TOPICS[axis], retry, future
 
 
 def _text_stream(
@@ -214,11 +238,28 @@ def _text_stream(
     mode: prompts.PacingMode,
     hint_topic: str | None,
     retry: bool,
+    future: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Select the configured interviewer text stream."""
     if settings.interview_provider == "claude":
-        return _claude_text_stream(current, user_text, settings, mode, hint_topic, retry)
-    return _gemini_text_stream(current, user_text, settings, mode, hint_topic, retry)
+        return _claude_text_stream(
+            current,
+            user_text,
+            settings,
+            mode,
+            hint_topic,
+            retry,
+            future,
+        )
+    return _gemini_text_stream(
+        current,
+        user_text,
+        settings,
+        mode,
+        hint_topic,
+        retry,
+        future,
+    )
 
 
 async def _gemini_text_stream(
@@ -228,9 +269,10 @@ async def _gemini_text_stream(
     mode: prompts.PacingMode,
     hint_topic: str | None,
     retry: bool,
+    future: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Yield Gemini interviewer text and usage updates."""
-    contents = _build_contents(current, user_text, mode, hint_topic, retry)
+    contents = _build_contents(current, user_text, mode, hint_topic, retry, future)
     tool = knowledge.file_search_tool()
     config = types.GenerateContentConfig(
         system_instruction=prompts.build_fixed_prefix(current["age_2040"]),
@@ -257,6 +299,7 @@ async def _claude_text_stream(
     mode: prompts.PacingMode,
     hint_topic: str | None,
     retry: bool,
+    future: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Yield Claude interviewer text and final usage."""
     if settings.file_search_store_name:
@@ -272,7 +315,14 @@ async def _claude_text_stream(
                 "cache_control": {"type": "ephemeral"},
             }
         ],
-        messages=_build_claude_messages(current, user_text, mode, hint_topic, retry),
+        messages=_build_claude_messages(
+            current,
+            user_text,
+            mode,
+            hint_topic,
+            retry,
+            future,
+        ),
     ) as stream:
         async for text in stream.text_stream:
             yield text, None
@@ -294,6 +344,7 @@ def _build_claude_messages(
     mode: prompts.PacingMode,
     hint_topic: str | None = None,
     retry: bool = False,
+    future: bool = False,
 ) -> list[dict[str, str]]:
     """Build text-only Claude messages with the current instruction last."""
     messages = [
@@ -311,6 +362,7 @@ def _build_claude_messages(
             mode,
             hint_topic,
             retry,
+            future,
         )
     )
     messages.append({"role": "user", "content": text})
@@ -323,6 +375,7 @@ def _build_contents(
     mode: prompts.PacingMode,
     hint_topic: str | None = None,
     retry: bool = False,
+    future: bool = False,
 ) -> list[types.Content]:
     """Build full conversation contents with the current utterance and its instruction last."""
     contents = [
@@ -340,6 +393,7 @@ def _build_contents(
         mode,
         hint_topic,
         retry,
+        future,
     )
     contents.append(_content("user", assembled))
     return contents

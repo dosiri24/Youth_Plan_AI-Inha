@@ -18,6 +18,7 @@ const METRICS: { key: keyof ActivityTotals; label: string }[] = [
   { key: "visit_participant", label: "참여자 접속" },
   { key: "visit_admin", label: "담당자 접속" },
   { key: "interview_start", label: "인터뷰 시작" },
+  { key: "result_view", label: "결과 확인" },
   { key: "submission", label: "제출" },
 ];
 
@@ -25,6 +26,7 @@ const EVENT_LABELS: Record<keyof ActivityTotals, string> = {
   visit_participant: "참여자 접속",
   visit_admin: "담당자 접속",
   interview_start: "인터뷰 시작",
+  result_view: "결과 확인",
   submission: "제출",
 };
 
@@ -58,7 +60,7 @@ export default function ActivityPage() {
         )}
         {state.status === "ready" && (
           <>
-            <dl className="grid grid-cols-4 gap-4">
+            <dl className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
               {METRICS.map(({ key, label }) => (
                 <div className="rounded-2xl bg-card px-5 py-5" key={key}>
                   <dt className="text-[13px] font-semibold text-muted-foreground">

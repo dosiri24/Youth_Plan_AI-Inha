@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     file_search_store_name: str | None = None
     gcp_project_id: str | None = None
     interview_target_turns: int = 18
+    interview_future_turn: int = 8
     interview_hint_turn: int = 10
     interview_wrapup_turn: int = 15
     interview_max_extra_turns: int = 4

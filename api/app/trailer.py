@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 _END_MARKER = "[[END_INTERVIEW]]"
 _MALICIOUS_MARKER = "[[MALICIOUS_RESPONSE]]"
+_NON_RESIDENT_MARKER = "[[NON_RESIDENT]]"
 # Decoration characters that never carry meaning in Korean prose, so removal is lossless.
 _DECORATION = "*_`~"
 _LINE_LEAD = "#>-•"
@@ -14,6 +15,7 @@ class TrailerResult:
     text: str
     ended: bool
     malicious: bool
+    non_resident: bool
 
 
 class TrailerParser:
@@ -54,6 +56,7 @@ class TrailerParser:
             text=text,
             ended=_END_MARKER in trailer,
             malicious=_MALICIOUS_MARKER in trailer,
+            non_resident=_NON_RESIDENT_MARKER in trailer,
         )
 
     def _strip(self, text: str) -> str:
