@@ -19,8 +19,8 @@ import {
   MethodSection,
   QuoteText,
   Rich,
+  SectorSection,
   TensionSection,
-  TopicSection,
   TypeSection,
 } from "./sections";
 import tokens from "./tokens.module.css";
@@ -220,12 +220,12 @@ export default function Report() {
 
         <MethodSection sample={briefing?.sample} />
 
-        <TopicSection
+        <SectorSection
           lead={briefing?.leads.topics}
           participants={participants}
           quotes={quotes}
           read={briefing?.reads.topics}
-          topics={run.topics}
+          sectors={run.sectors}
         />
 
         <AxisSection
@@ -243,7 +243,7 @@ export default function Report() {
           lead={briefing?.leads.cross}
           participants={participants}
           read={briefing?.reads.cross}
-          topics={run.topics}
+          sectors={run.sectors}
         />
 
         <TypeSection

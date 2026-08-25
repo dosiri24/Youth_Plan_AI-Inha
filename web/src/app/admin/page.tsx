@@ -4,14 +4,12 @@ import Link from "next/link";
 import {
   Fragment,
   useEffect,
-  useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
 
 import { getPoleBadge } from "@/lib/city-axes";
-import { getCityType } from "@/lib/city-types";
 import {
   getLatestAnalysis,
   runAnalysis,
@@ -23,20 +21,31 @@ import styles from "./dashboard.module.css";
 import {
   AGE_BANDS,
   AXIS_QUESTION,
-  SECTIONS,
+  SETTLEMENT_CARD_FIELDS,
   axisTitle,
   buildDemandCsv,
   formatDayRange,
   formatStamp,
-  spellCode,
 } from "./dashboard-data";
 import { DetailPanel, type Selection } from "./detail-panel";
-import { IncheonMapCard } from "./incheon-map";
+import { IncheonMapCard, type MapMode } from "./incheon-map";
+import { KeywordBubbleCard } from "./keyword-bubbles";
 import { CountUp, useReveal, useSlide } from "./motion";
+import { Switch } from "./switch";
 import { useTip } from "./tip";
 
 const STAGE_WIDTH = 1920;
 const STAGE_HEIGHT = 1080;
+
+const MAP_MODES = [
+  ["people", "참여자 수"],
+  ["places", "언급 수"],
+] as const satisfies readonly (readonly [MapMode, string])[];
+
+const SORT_KEYS = [
+  [1, "건수순"],
+  [2, "언급 인원순"],
+] as const;
 
 type LoadStatus = "loading" | "ready" | "empty" | "error";
 
@@ -48,15 +57,18 @@ export default function Dashboard() {
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [run, setRun] = useState<AnalysisRun | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
+  /* The chapter the keyword field is narrowed to, held apart from the selection
+     rather than read off it. They part company as soon as a bubble is clicked: the
+     panel moves on to that keyword while the field it was picked from has to stay
+     as it was, or every pick would throw away the narrowing that made the pick
+     possible. */
+  const [sector, setSector] = useState<string | null>(null);
   const [aiMode, setAiMode] = useState(false);
   const [sortKey, setSortKey] = useState<1 | 2>(1);
+  const [mapMode, setMapMode] = useState<MapMode>("people");
   const [updating, setUpdating] = useState(false);
   const [noSubmissions, setNoSubmissions] = useState(false);
   const [scale, setScale] = useState<number | null>(null);
-
-  const knobRef = useRef<HTMLElement>(null);
-  const sortRefs = useRef<(HTMLElement | null)[]>([]);
-  const knobPlaced = useRef(false);
 
   const { tipRef, tip } = useTip();
   const reveal = useReveal(run);
@@ -87,32 +99,32 @@ export default function Dashboard() {
     return () => window.removeEventListener("resize", fit);
   }, []);
 
-  /* The pill moves to the active option, and its width follows too because the
-     two labels differ in length. */
-  useEffect(() => {
-    const knob = knobRef.current;
-    const target = sortRefs.current[sortKey - 1];
-    if (!knob || !target) return;
+  /**
+   * Moves the selection, and moves the keyword field's chapter with it unless the
+   * new selection is a keyword.
+   *
+   * A chapter row, a top-demand row and a cell of the age table all say the same
+   * thing about which chapter is being read, so all three narrow the field.
+   * Anything that is not about a chapter — a district, an axis, a person, an AI
+   * note, or going back to nothing — widens it again, because leaving the field
+   * narrowed under a heading that no longer mentions the chapter is how a partial
+   * picture gets read as the whole one.
+   */
+  const select = (next: Selection | null) => {
+    setSelection(next);
+    if (next?.kind === "keyword") return;
 
-    // Sliding on the very first placement would make loading look unsettled.
-    const instant = !knobPlaced.current;
-    knobPlaced.current = true;
-    if (instant) knob.style.transition = "none";
-    knob.style.width = `${target.offsetWidth}px`;
-    knob.style.transform = `translateX(${target.offsetLeft}px)`;
-    if (instant) {
-      requestAnimationFrame(() => {
-        knob.style.transition = "";
-      });
-    }
-  }, [sortKey]);
+    setSector(
+      next?.kind === "sector" || next?.kind === "top" ? next.sector : null,
+    );
+  };
 
   const pick = (next: Selection) => ({
-    onClick: () => setSelection(next),
+    onClick: () => select(next),
     onKeyDown: (event: KeyboardEvent) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
-      setSelection(next);
+      select(next);
     },
     role: "button",
     tabIndex: 0,
@@ -132,7 +144,7 @@ export default function Dashboard() {
       const latest = await getLatestAnalysis();
       setRun(latest);
       setStatus(latest === null ? "empty" : "ready");
-      setSelection(null);
+      select(null);
     } catch {
       setStatus("error");
     } finally {
@@ -159,7 +171,7 @@ export default function Dashboard() {
     run?.ai_notes?.[card] ? (
       <button
         className={styles.aichip}
-        onClick={() => setSelection({ kind: "ai", card })}
+        onClick={() => select({ kind: "ai", card })}
         type="button"
       >
         AI 해석
@@ -180,9 +192,12 @@ export default function Dashboard() {
 
   const kpi = run?.kpi;
   const ages = run?.ages;
-  const topics = run?.topics;
+  const sectors = run?.sectors;
   const cross = run?.cross;
   const people = run?.people;
+  const settlement = run?.settlement;
+  const places = run?.places;
+  const keywords = run?.keywords;
 
   const summary: [string, ReactNode, string][] = [
     [
@@ -211,25 +226,26 @@ export default function Dashboard() {
 
   const ageMax = Math.max(1, ...(ages ?? []).map((band) => band.total));
 
-  const topicRows = [...(topics ?? [])].sort((left, right) =>
+  const sectorRows = [...(sectors ?? [])].sort((left, right) =>
     sortKey === 1 ? right.demands - left.demands : right.people - left.people,
   );
-  const topicMax = Math.max(
+  const sectorMax = Math.max(
     1,
-    ...topicRows.map((row) => (sortKey === 1 ? row.demands : row.people)),
+    ...sectorRows.map((row) => (sortKey === 1 ? row.demands : row.people)),
   );
 
+  /* A sector with no demands is left out of `cross` entirely, but the table names the
+     same ten chapters as the card above it: a missing row reads as a chapter that does
+     not exist rather than one nobody spoke about. */
+  const crossRows = sectors ?? [];
+  const crossZero = AGE_BANDS.map(() => 0);
   const crossMax = Math.max(
     1,
-    ...(topics ?? []).flatMap((row) => cross?.[row.topic] ?? []),
+    ...crossRows.flatMap((row) => cross?.[row.sector] ?? []),
   );
 
-  const typeRows = run
-    ? Object.entries(run.type_distribution).sort(
-        (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
-      )
-    : [];
-  const typeMax = Math.max(1, ...typeRows.map(([, count]) => count));
+  const topRows = run?.top_demands?.by_sector ?? [];
+  const topMax = Math.max(1, ...topRows.map((row) => row.count));
 
   const fit = scale ?? 1;
 
@@ -245,7 +261,13 @@ export default function Dashboard() {
         }}
       >
         <div className={styles.top}>
-          <span className={styles.brand}>유스플랜AI</span>
+          <button
+            className={styles.brand}
+            onClick={() => window.location.reload()}
+            type="button"
+          >
+            유스플랜AI
+          </button>
           <span className={styles.t}>청년 의견 관리 플랫폼</span>
           <span className={styles.d}>{stamp}</span>
           <span className={styles.sp} />
@@ -308,13 +330,21 @@ export default function Dashboard() {
         <div className={styles.grid}>
           <div className={`${styles.col} ${styles.l}`}>
             <div className={styles.card}>
-              <h2>군·구별 참여자 수{aiChip("map")}</h2>
+              <h2>
+                군·구별 분포
+                <Switch
+                  onChange={setMapMode}
+                  options={MAP_MODES}
+                  value={mapMode}
+                />
+                {aiChip("map")}
+              </h2>
               {run?.regions_count ? (
                 <IncheonMapCard
                   counts={run.regions_count}
-                  onSelect={(region) =>
-                    setSelection({ kind: "region", region })
-                  }
+                  mode={mapMode}
+                  onSelect={(region) => select({ kind: "region", region })}
+                  places={places ?? {}}
                   reveal={reveal}
                   selected={
                     selection?.kind === "region" ? selection.region : null
@@ -410,139 +440,199 @@ export default function Dashboard() {
           <div className={`${styles.col} ${styles.m}`}>
             <div className={styles.card}>
               <h2>
-                계획 부문별 요구 <em>건수 · 언급한 사람</em>
-                <span className={styles.sortsw}>
-                  <i className={styles.knob} ref={knobRef} />
-                  {([1, 2] as const).map((key, index) => (
-                    <b
-                      className={sortKey === key ? styles.on : ""}
-                      key={key}
-                      onClick={() => setSortKey(key)}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") return;
-                        event.preventDefault();
-                        setSortKey(key);
-                      }}
-                      ref={(node) => {
-                        sortRefs.current[index] = node;
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      {key === 1 ? "건수순" : "언급 인원순"}
-                    </b>
-                  ))}
-                </span>
-                {aiChip("topics")}
+                청년 요구 키워드
+                {aiChip("keywords")}
               </h2>
-              <div className={styles.body}>
-                {topicRows.length ? (
-                  topicRows.map((row, index) => (
-                    <div
-                      className={`${styles.sect} ${
-                        selection?.kind === "topic" &&
-                        selection.topic === row.topic
-                          ? styles.on
-                          : ""
-                      }`}
-                      key={row.topic}
-                      ref={slide(row.topic)}
-                      {...tip(
-                        `${row.topic} (${SECTIONS[row.topic]}) — 요구 ${row.demands}건, ${kpi?.participants ?? 0}명 중 ${row.people}명이 언급`,
-                      )}
-                      {...pick({ kind: "topic", topic: row.topic })}
-                    >
-                      <div className={styles.lb}>{row.topic}</div>
-                      <div className={styles.track}>
-                        <div
-                          className={styles.fill}
-                          style={{
-                            width: reveal.grown
-                              ? `${((sortKey === 1 ? row.demands : row.people) / topicMax) * 100}%`
-                              : 0,
-                            background: "var(--blue)",
-                            ...reveal.lag(index * 90),
-                          }}
-                        />
-                      </div>
-                      <div className={styles.n}>
-                        <b>{sortKey === 1 ? row.demands : row.people}</b>
-                        {sortKey === 1
-                          ? `건 · ${row.people}명`
-                          : `명 · ${row.demands}건`}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <NoData text="계획 부문 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
-                )}
-              </div>
+              {keywords?.length ? (
+                <KeywordBubbleCard
+                  keywords={keywords}
+                  onClearFilter={() => setSector(null)}
+                  onSelect={(keyword) => select({ kind: "keyword", keyword })}
+                  reveal={reveal}
+                  sector={sector}
+                  selected={
+                    selection?.kind === "keyword" ? selection.keyword : null
+                  }
+                  tip={tip}
+                />
+              ) : (
+                <div className={styles.body}>
+                  <NoData text="키워드 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
+                </div>
+              )}
             </div>
 
-            <div className={styles.card}>
-              <h2>
-                도시가치 4축
-                {aiChip("axes")}
-              </h2>
-              <div className={styles.body}>
-                {run ? (
-                  run.axis_stats.map((stat, index) => {
-                    const [left, right] = stat.poles;
-                    const total = left.count + right.count || 1;
-                    return (
+            <div className={styles.lead}>
+              <div className={styles.card}>
+                <h2>
+                  계획 부문별 요구 <em>건수 · 언급한 사람</em>
+                  <Switch
+                    onChange={setSortKey}
+                    options={SORT_KEYS}
+                    value={sortKey}
+                  />
+                  {aiChip("topics")}
+                </h2>
+                <div className={`${styles.body} ${styles.list}`}>
+                  {sectorRows.length ? (
+                    sectorRows.map((row, index) => (
                       <div
-                        className={`${styles.ax} ${
-                          selection?.kind === "axis" &&
-                          selection.axis === stat.axis
+                        className={`${styles.sect} ${
+                          selection?.kind === "sector" &&
+                          selection.sector === row.sector
                             ? styles.on
                             : ""
                         }`}
-                        key={stat.axis}
+                        key={row.sector}
+                        ref={slide(row.sector)}
                         {...tip(
-                          `${axisTitle(stat.axis)} — 눌러서 극별 요구 경향과 발언 보기`,
+                          `${row.sector} — 요구 ${row.demands}건, ${kpi?.participants ?? 0}명 중 ${row.people}명이 언급`,
                         )}
-                        {...pick({ kind: "axis", axis: stat.axis })}
+                        {...pick({ kind: "sector", sector: row.sector })}
                       >
-                        <div className={styles.h}>
-                          <b>{axisTitle(stat.axis)}</b>
-                          <span>{AXIS_QUESTION[stat.axis]}</span>
+                        <div className={styles.lb}>{row.sector}</div>
+                        <div className={styles.track}>
+                          <div
+                            className={styles.fill}
+                            style={{
+                              width: reveal.grown
+                                ? `${((sortKey === 1 ? row.demands : row.people) / sectorMax) * 100}%`
+                                : 0,
+                              background: "var(--blue)",
+                              ...reveal.lag(index * 90),
+                            }}
+                          />
                         </div>
-                        <div className={styles.bar}>
-                          <div
-                            className={`${styles.seg} ${styles.l}`}
-                            style={{
-                              width: reveal.grown
-                                ? `${(left.count / total) * 100}%`
-                                : 0,
-                              ...reveal.lag(index * 140),
-                            }}
-                          >
-                            <span className={styles.cap}>
-                              {getPoleBadge(stat.axis, left.letter)}{" "}
-                              {left.count}명
-                            </span>
-                          </div>
-                          <div
-                            className={`${styles.seg} ${styles.r}`}
-                            style={{
-                              width: reveal.grown
-                                ? `${(right.count / total) * 100}%`
-                                : 0,
-                              ...reveal.lag(index * 140),
-                            }}
-                          >
-                            <span className={styles.cap}>
-                              {getPoleBadge(stat.axis, right.letter)}{" "}
-                              {right.count}명
-                            </span>
-                          </div>
+                        <div className={styles.n}>
+                          <b>{sortKey === 1 ? row.demands : row.people}</b>
+                          {sortKey === 1
+                            ? `건 · ${row.people}명`
+                            : `명 · ${row.demands}건`}
                         </div>
                       </div>
-                    );
-                  })
-                ) : (
-                  <NoData text="축 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
-                )}
+                    ))
+                  ) : (
+                    <NoData text="계획 부문 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
+                  )}
+                </div>
+              </div>
+
+              <div className={styles.side}>
+                <div className={styles.card}>
+                  <h2>
+                    최우선 요구 <em>먼저 이뤄지길 바란 것</em>
+                  </h2>
+                  <div className={`${styles.body} ${styles.list}`}>
+                    {topRows.length ? (
+                      topRows.map((row, index) => (
+                        <div
+                          className={`${styles.sect} ${styles.tight} ${
+                            selection?.kind === "top" &&
+                            selection.sector === row.sector
+                              ? styles.on
+                              : ""
+                          }`}
+                          key={row.sector}
+                          {...tip(
+                            `${row.sector} — ${row.count}명이 이 부문을 먼저 꼽았습니다`,
+                          )}
+                          {...pick({ kind: "top", sector: row.sector })}
+                        >
+                          <div className={styles.lb}>{row.sector}</div>
+                          <div className={styles.track}>
+                            <div
+                              className={styles.fill}
+                              style={{
+                                width: reveal.grown
+                                  ? `${(row.count / topMax) * 100}%`
+                                  : 0,
+                                background: "var(--blue)",
+                                ...reveal.lag(index * 90),
+                              }}
+                            />
+                          </div>
+                          <div className={styles.n}>
+                            <b>{row.count}</b>명
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <NoData text="아직 최우선 요구를 고른 참여자가 없습니다." />
+                    )}
+                  </div>
+                </div>
+
+                <div className={styles.card}>
+                  <h2>
+                    정착 의향{" "}
+                    <span className={styles.r}>
+                      <span className={`${styles.lg} ${styles.m}`}>인천</span>
+                      <span className={`${styles.lg} ${styles.f}`}>타지</span>
+                    </span>
+                  </h2>
+                  <div className={styles.body}>
+                    {settlement ? (
+                      <>
+                        {SETTLEMENT_CARD_FIELDS.map(([field, label], index) => {
+                          const counts = settlement[field];
+                          const answered = settlement.answered[field];
+                          return (
+                            <div
+                              className={styles.stay}
+                              key={field}
+                              {...tip(
+                                answered
+                                  ? `${label} — 인천 ${counts.인천}명 · 타지 ${counts.타지}명 (참여 ${settlement.participants}명 중 ${answered}명이 말함)`
+                                  : `${label} — 아직 말한 참여자가 없습니다`,
+                              )}
+                            >
+                              <div className={styles.lb}>{label}</div>
+                              <div className={styles.track}>
+                                <div
+                                  className={`${styles.seg} ${styles.l}`}
+                                  style={{
+                                    width: reveal.grown
+                                      ? `${(counts.인천 / (answered || 1)) * 100}%`
+                                      : 0,
+                                    ...reveal.lag(index * 120),
+                                  }}
+                                />
+                                <div
+                                  className={`${styles.seg} ${styles.r}`}
+                                  style={{
+                                    width: reveal.grown
+                                      ? `${(counts.타지 / (answered || 1)) * 100}%`
+                                      : 0,
+                                    ...reveal.lag(index * 120),
+                                  }}
+                                />
+                              </div>
+                              <div className={styles.n}>
+                                {answered ? (
+                                  <>
+                                    <b>{counts.인천}</b>
+                                    {` · ${counts.타지}`}
+                                  </>
+                                ) : (
+                                  "—"
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className={styles.base}>
+                          참여 {settlement.participants}명 중 말한 사람 ·{" "}
+                          {SETTLEMENT_CARD_FIELDS.map(
+                            ([field, label]) =>
+                              `${label} ${settlement.answered[field]}명`,
+                          ).join(" · ")}
+                        </div>
+                      </>
+                    ) : (
+                      <NoData text="정착 의향 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -553,9 +643,9 @@ export default function Dashboard() {
                   {aiChip("cross")}
                 </h2>
                 <div
-                  className={`${styles.body} ${topics && cross ? styles.hm : ""}`}
+                  className={`${styles.body} ${crossRows.length && cross ? styles.hm : ""}`}
                 >
-                  {topics && cross ? (
+                  {crossRows.length && cross ? (
                     <>
                       <div className={styles.hh} />
                       {AGE_BANDS.map((band) => (
@@ -563,34 +653,39 @@ export default function Dashboard() {
                           {band}세
                         </div>
                       ))}
-                      {topics.map((row, rowIndex) => (
-                        <Fragment key={row.topic}>
-                          <div className={styles.rl}>{row.topic}</div>
-                          {(cross[row.topic] ?? []).map((value, index) => (
-                            <div
-                              className={styles.cell}
-                              key={AGE_BANDS[index]}
-                              style={{
-                                background: !reveal.grown
-                                  ? "#fff"
-                                  : value === 0
-                                    ? "#f2f5f7"
-                                    : `rgba(0,94,184,${0.12 + (0.78 * value) / crossMax})`,
-                                color: !reveal.grown
-                                  ? "transparent"
-                                  : value / crossMax > 0.55
+                      {crossRows.map((row, rowIndex) => (
+                        <Fragment key={row.sector}>
+                          <div className={styles.rl}>{row.sector}</div>
+                          {(cross[row.sector] ?? crossZero).map(
+                            (value, index) => (
+                              <div
+                                className={styles.cell}
+                                key={AGE_BANDS[index]}
+                                style={{
+                                  background: !reveal.grown
                                     ? "#fff"
-                                    : "var(--ink2)",
-                                ...reveal.lag((rowIndex + index) * 56),
-                              }}
-                              {...tip(
-                                `${AGE_BANDS[index]}세가 말한 ${row.topic} 요구 ${value}건`,
-                              )}
-                              {...pick({ kind: "topic", topic: row.topic })}
-                            >
-                              {value || ""}
-                            </div>
-                          ))}
+                                    : value === 0
+                                      ? "#f2f5f7"
+                                      : `rgba(0,94,184,${0.12 + (0.78 * value) / crossMax})`,
+                                  color: !reveal.grown
+                                    ? "transparent"
+                                    : value / crossMax > 0.55
+                                      ? "#fff"
+                                      : "var(--ink2)",
+                                  ...reveal.lag((rowIndex + index) * 56),
+                                }}
+                                {...tip(
+                                  `${AGE_BANDS[index]}세가 말한 ${row.sector} 요구 ${value}건`,
+                                )}
+                                {...pick({
+                                  kind: "sector",
+                                  sector: row.sector,
+                                })}
+                              >
+                                {value || ""}
+                              </div>
+                            ),
+                          )}
                         </Fragment>
                       ))}
                     </>
@@ -602,47 +697,67 @@ export default function Dashboard() {
 
               <div className={styles.card}>
                 <h2>
-                  청년이 바라는 도시유형 <em>4축 조합 · 인원</em>
-                  {aiChip("types")}
+                  도시가치 4축
+                  {aiChip("axes")}
                 </h2>
-                <div className={`${styles.body} ${styles.types}`}>
-                  {typeRows.length ? (
-                    typeRows.map(([code, count], index) => (
-                      <div
-                        className={`${styles.ty} ${
-                          selection?.kind === "type" && selection.code === code
-                            ? styles.on
-                            : ""
-                        }`}
-                        key={code}
-                        {...tip(
-                          `${getCityType(code).nickname} — ${spellCode(code)}`,
-                        )}
-                        {...pick({ kind: "type", code })}
-                      >
-                        <div className={styles.nm}>
-                          {getCityType(code).nickname}
+                <div className={`${styles.body} ${styles.axes}`}>
+                  {run ? (
+                    run.axis_stats.map((stat, index) => {
+                      const [left, right] = stat.poles;
+                      const total = left.count + right.count || 1;
+                      return (
+                        <div
+                          className={`${styles.ax} ${
+                            selection?.kind === "axis" &&
+                            selection.axis === stat.axis
+                              ? styles.on
+                              : ""
+                          }`}
+                          key={stat.axis}
+                          {...tip(
+                            `${axisTitle(stat.axis)} — 눌러서 극별 요구 경향과 발언 보기`,
+                          )}
+                          {...pick({ kind: "axis", axis: stat.axis })}
+                        >
+                          <div className={styles.h}>
+                            <b>{axisTitle(stat.axis)}</b>
+                            <span>{AXIS_QUESTION[stat.axis]}</span>
+                          </div>
+                          <div className={styles.bar}>
+                            <div
+                              className={`${styles.seg} ${styles.l}`}
+                              style={{
+                                width: reveal.grown
+                                  ? `${(left.count / total) * 100}%`
+                                  : 0,
+                                ...reveal.lag(index * 140),
+                              }}
+                            >
+                              <span className={styles.cap}>
+                                {getPoleBadge(stat.axis, left.letter)}{" "}
+                                {left.count}명
+                              </span>
+                            </div>
+                            <div
+                              className={`${styles.seg} ${styles.r}`}
+                              style={{
+                                width: reveal.grown
+                                  ? `${(right.count / total) * 100}%`
+                                  : 0,
+                                ...reveal.lag(index * 140),
+                              }}
+                            >
+                              <span className={styles.cap}>
+                                {getPoleBadge(stat.axis, right.letter)}{" "}
+                                {right.count}명
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <div className={styles.ax4}>{spellCode(code)}</div>
-                        <div className={styles.track}>
-                          <div
-                            className={styles.fill}
-                            style={{
-                              width: reveal.grown
-                                ? `${(count / typeMax) * 100}%`
-                                : 0,
-                              background: "var(--blue)",
-                              /* The list is as long as the sample, so the
-                                 stagger stops before the intro runs out. */
-                              ...reveal.lag(Math.min(index, 10) * 90),
-                            }}
-                          />
-                        </div>
-                        <div className={styles.n}>{count}명</div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
-                    <NoData text="유형 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
+                    <NoData text="축 집계가 아직 없습니다. 분석을 업데이트하면 표시됩니다." />
                   )}
                 </div>
               </div>
@@ -650,9 +765,9 @@ export default function Dashboard() {
           </div>
 
           <DetailPanel
-            onClear={() => setSelection(null)}
+            onClear={() => select(null)}
             onSelectPerson={(submissionId) =>
-              setSelection({ kind: "person", submissionId })
+              select({ kind: "person", submissionId })
             }
             run={run}
             selection={selection}

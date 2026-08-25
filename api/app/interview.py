@@ -285,9 +285,7 @@ async def _gemini_text_stream(
     )
     async for chunk in stream:
         usage = (
-            gemini.token_usage(chunk.usage_metadata)
-            if chunk.usage_metadata is not None
-            else None
+            gemini.token_usage(chunk.usage_metadata) if chunk.usage_metadata is not None else None
         )
         yield chunk.text or "", usage
 

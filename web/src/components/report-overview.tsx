@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 
 import { AXIS_INFO, getPoleLabel } from "@/lib/city-axes";
-import type { PersonalReport } from "@/lib/api";
+import type { Demand, PersonalReport } from "@/lib/api";
 
 type ReportOverviewProps = {
   report: PersonalReport;
@@ -71,6 +71,48 @@ function StoryOverview({ report }: ReportOverviewProps) {
   );
 }
 
+/**
+ * Participants asked where their own words end and the write-up begins, so the
+ * verbatim quotes lead and the organized sentences follow under their own label.
+ */
+function DemandBlock({ demand }: { demand: Demand }) {
+  const quoted = demand.quotes.length > 0;
+
+  return (
+    <div>
+      <h4 className="text-[16px] font-bold">{demand.title}</h4>
+      {quoted && (
+        <>
+          <p className="mt-3 text-[12px] font-bold text-primary">내가 한 말</p>
+          <ul className="mt-2 space-y-2">
+            {demand.quotes.map((quote, index) => (
+              <li key={`${demand.id}-q${index}`}>
+                <blockquote className="rounded-[18px] rounded-tr-md bg-secondary px-3.5 py-3 text-[14px] leading-6 whitespace-pre-wrap">
+                  {`“${quote.text}”`}
+                </blockquote>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 text-[12px] font-bold text-muted-foreground">
+            정리한 내용
+          </p>
+        </>
+      )}
+      <ul className={`space-y-2.5 ${quoted ? "mt-2" : "mt-3"}`}>
+        {demand.description.map((sentence, index) => (
+          <li
+            key={`${demand.id}-${index}`}
+            className="flex gap-3 rounded-[18px] bg-muted px-3.5 py-3 text-[14px] leading-6"
+          >
+            <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-incheon-green" />
+            <span>{sentence}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Read-only demands let submission review stay separate from revision controls. */
 function DemandOverview({ report }: ReportOverviewProps) {
   return (
@@ -90,6 +132,9 @@ function DemandOverview({ report }: ReportOverviewProps) {
           </span>
         )}
       </div>
+      <p className="mt-3 text-[15px] leading-6 text-muted-foreground">
+        내가 한 말을 먼저 보여주고, 그 아래에 정리한 내용을 담았어요.
+      </p>
 
       <div className="mt-6 space-y-4">
         {report.axis_demands.map((axisDemand) => (
@@ -108,20 +153,7 @@ function DemandOverview({ report }: ReportOverviewProps) {
                 </p>
               )}
               {axisDemand.demands.map((demand) => (
-                <div key={demand.id}>
-                  <h4 className="text-[16px] font-bold">{demand.title}</h4>
-                  <ul className="mt-3 space-y-2.5">
-                    {demand.description.map((sentence, index) => (
-                      <li
-                        key={`${demand.id}-${index}`}
-                        className="flex gap-3 rounded-[18px] bg-muted px-3.5 py-3 text-[14px] leading-6"
-                      >
-                        <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-incheon-green" />
-                        <span>{sentence}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <DemandBlock key={demand.id} demand={demand} />
               ))}
             </div>
           </article>

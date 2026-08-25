@@ -18,6 +18,36 @@ type IncheonMap = {
 
 const MAP = mapData as IncheonMap;
 
+/** Which of the two measures the shapes currently carry. */
+export type MapMode = "people" | "places";
+
+/* Two measures on the same shapes would read as one if they shared the ramp, so
+   each takes one of the board's two colours and only one is on screen at a time.
+   `deep` is where a ramp turns dark enough to carry white text, and the shadow the
+   text needs there; the teal never gets that dark, so it keeps dark text throughout. */
+const TONE: Record<
+  MapMode,
+  {
+    measure: string;
+    unit: string;
+    top: [number, number, number];
+    deep: { at: number; halo: string } | null;
+  }
+> = {
+  people: {
+    measure: "참여자",
+    unit: "명",
+    top: [0, 94, 184],
+    deep: { at: 0.55, halo: "rgba(0,50,100,.55)" },
+  },
+  places: {
+    measure: "요구에 언급",
+    unit: "건",
+    top: [0, 178, 169],
+    deep: null,
+  },
+};
+
 /** Only the narrow coastal district needs its label nudged. */
 const NUDGE: Record<string, [number, number]> = { 제물포구: [-16, -6] };
 
@@ -28,7 +58,10 @@ const CLIP_ID = "incheon-map-clip";
 
 type Props = {
   counts: Record<string, number>;
+  mode: MapMode;
   onSelect: (region: string, count: number) => void;
+  /** Districts a demand named, which is a different thing from who took part. */
+  places: Record<string, number>;
   reveal: Reveal;
   selected: string | null;
   tip: (text: string) => TipHandlers;
@@ -44,7 +77,9 @@ const INK_STEP = 80;
  */
 export function IncheonMapCard({
   counts,
+  mode,
   onSelect,
+  places,
   reveal,
   selected,
   tip,
@@ -64,16 +99,22 @@ export function IncheonMapCard({
     return () => observer.disconnect();
   }, []);
 
-  // One ramp from white to Incheon Blue, with zero participants at the palest end.
-  const top = Math.max(0, ...Object.values(counts));
+  const tone = TONE[mode];
+  const values = mode === "people" ? counts : places;
+  const value = (region: string) => values[region] ?? 0;
+
+  // One ramp from white to the measure's colour, with zero at the palest end.
+  const top = Math.max(0, ...Object.values(values));
   const max = top || 1;
+  const peak = `rgb(${tone.top.join(",")})`;
   const fill = (n: number) =>
-    `rgb(${Math.round(255 - 255 * (n / max))},${Math.round(
-      255 - 161 * (n / max),
-    )},${Math.round(255 - 71 * (n / max))})`;
-  const ink = (n: number) => (n / max > 0.55 ? "#fff" : "#3d4448");
+    `rgb(${tone.top
+      .map((channel) => Math.round(255 - (255 - channel) * (n / max)))
+      .join(",")})`;
+  const deep = (n: number) => tone.deep !== null && n / max > tone.deep.at;
+  const ink = (n: number) => (deep(n) ? "#fff" : "#3d4448");
   const halo = (n: number) =>
-    n / max > 0.55 ? "rgba(0,50,100,.55)" : "rgba(255,255,255,.85)";
+    tone.deep && deep(n) ? tone.deep.halo : "rgba(255,255,255,.85)";
 
   /* Picking one district pushes the rest back rather than boxing the winner in:
      the outline can then follow the real boundary instead of a bounding box. */
@@ -81,18 +122,27 @@ export function IncheonMapCard({
   const picked = MAP.d.find((district) => district.name === selected) ?? null;
 
   const order = [...MAP.d.map((district) => district.name), "옹진군"].sort(
-    (left, right) => (counts[right] ?? 0) - (counts[left] ?? 0),
+    (left, right) => value(right) - value(left),
   );
   const inkLag = (region: string) =>
     reveal.lag(order.indexOf(region) * INK_STEP);
 
-  const clickable = (region: string, n: number) => ({
-    ...tip(n ? `${region} ${n}명` : `${region} 참여자 없음`),
-    onClick: () => onSelect(region, n),
+  /* The measure not on the shapes is still worth a glance, so hovering gives
+     both without either crowding the map. */
+  const label = (region: string) => {
+    const n = counts[region] ?? 0;
+    const mentions = places[region] ?? 0;
+    const who = n ? `${region} ${n}명` : `${region} 참여자 없음`;
+    return mentions ? `${who} · 요구에 언급 ${mentions}건` : who;
+  };
+
+  const clickable = (region: string) => ({
+    ...tip(label(region)),
+    onClick: () => onSelect(region, counts[region] ?? 0),
     onKeyDown: (event: KeyboardEvent) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
-      onSelect(region, n);
+      onSelect(region, counts[region] ?? 0);
     },
     role: "button",
     tabIndex: 0,
@@ -104,7 +154,7 @@ export function IncheonMapCard({
   const scale = size ? Math.min(size.w / MAP.vw, size.h / MAP.vh) : 0;
   const viewWidth = size ? size.w / scale : MAP.vw;
   const viewHeight = size ? size.h / scale : MAP.vh;
-  const onjinCount = counts["옹진군"] ?? 0;
+  const onjinValue = value("옹진군");
 
   return (
     <div className={styles.mapwrap}>
@@ -122,10 +172,10 @@ export function IncheonMapCard({
               </defs>
               <g clipPath={`url(#${CLIP_ID})`}>
                 {MAP.d.map((district) => {
-                  const n = counts[district.name] ?? 0;
+                  const n = value(district.name);
                   return (
                     <path
-                      aria-label={`${district.name} ${n}명`}
+                      aria-label={`${district.name} ${n}${tone.unit}`}
                       className={`${styles.dist} ${
                         faded(district.name) ? styles.back : ""
                       }`}
@@ -136,12 +186,12 @@ export function IncheonMapCard({
                       strokeLinejoin="round"
                       strokeWidth="1.6"
                       style={inkLag(district.name)}
-                      {...clickable(district.name, n)}
+                      {...clickable(district.name)}
                     />
                   );
                 })}
                 {MAP.d.map((district) => {
-                  const n = counts[district.name] ?? 0;
+                  const n = value(district.name);
                   const [dx, dy] = NUDGE[district.name] ?? [0, 0];
                   return (
                     <g
@@ -172,7 +222,8 @@ export function IncheonMapCard({
                         x={district.x + dx}
                         y={district.y + dy + 17}
                       >
-                        {n}명
+                        {n}
+                        {tone.unit}
                       </text>
                     </g>
                   );
@@ -194,7 +245,7 @@ export function IncheonMapCard({
                 height: ONJIN_BOX.h * scale,
                 ...inkLag("옹진군"),
               }}
-              {...clickable("옹진군", onjinCount)}
+              {...clickable("옹진군")}
             >
               <svg
                 preserveAspectRatio="xMidYMid meet"
@@ -202,24 +253,31 @@ export function IncheonMapCard({
               >
                 <path
                   d={MAP.inset.d}
-                  fill={reveal.grown ? fill(onjinCount) : "#fff"}
+                  fill={reveal.grown ? fill(onjinValue) : "#fff"}
                   stroke="#16181a"
                   strokeWidth="0.6"
                 />
               </svg>
               <b style={{ opacity: reveal.grown ? 1 : 0 }}>
-                옹진군<span>{onjinCount}명</span>
+                옹진군
+                <span>
+                  {onjinValue}
+                  {tone.unit}
+                </span>
               </b>
             </div>
           </>
         )}
       </div>
       <div className={styles.scale}>
-        <span>0명</span>
-        <i
-          style={{ background: "linear-gradient(90deg,#fff,rgb(0,94,184))" }}
-        />
-        <span>{top}명</span>
+        <span>
+          {tone.measure} 0{tone.unit}
+        </span>
+        <i style={{ background: `linear-gradient(90deg,#fff,${peak})` }} />
+        <span>
+          {top}
+          {tone.unit}
+        </span>
       </div>
     </div>
   );

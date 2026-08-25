@@ -36,6 +36,7 @@ class Session(TypedDict):
     birth_year: int
     age_2040: int
     gender: Literal["male", "female", "other"]
+    fixture: str
     messages: list[Message]
     evidence_log: list[Evidence]
     axis_hints: dict[str, list[int]]
@@ -61,6 +62,7 @@ def create_session(
         "birth_year": birth_year,
         "age_2040": 2040 - birth_year,
         "gender": gender,
+        "fixture": "",
         "messages": [],
         "evidence_log": [],
         "axis_hints": {},

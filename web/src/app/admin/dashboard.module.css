@@ -43,10 +43,15 @@
   padding: 0 26px;
 }
 .brand {
+  font-family: inherit;
   font-weight: 800;
   color: var(--blue);
   font-size: 19px;
   letter-spacing: -0.02em;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
 }
 .top .t {
   font-size: 15px;
@@ -291,43 +296,90 @@
 .col.l {
   grid-template-rows: 1fr auto auto;
 }
+/* The two lower rows are as tall as their contents insist — the demand list has ten
+   chapters to show outright and the cross table eleven rows — and the keyword card
+   takes everything they leave. It is the one card here whose reading improves with
+   every pixel: the circles are laid out against the field's measured size, so a
+   taller field is a bigger picture rather than more white. */
 .col.m {
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: 1fr auto auto;
+}
+/* The lead card is read against the one demand each participant put first, so the
+   two sit side by side; settlement intent tucks under the narrower of the pair. */
+/* Ten chapters is a fixed count, so the row is the height they need. Leaving it to
+   the content would let the two stacked cards beside them decide it instead, and a
+   long top-demand list would push the cross table off the stage. The height holds all
+   ten rows outright: at 334px the list cleared its box by eight pixels and answered
+   with a scrollbar that moved almost nothing. */
+.lead {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 14px;
+  height: 344px;
+}
+.side {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 14px;
+  min-height: 0;
+}
+/* Ten chapters is more than the nine tags they replaced, so any list of them has to
+   be able to scroll rather than push the fixed stage past 1080. */
+.list {
+  overflow-y: auto;
+}
+.list::-webkit-scrollbar,
+.hm::-webkit-scrollbar {
+  width: 5px;
+}
+.list::-webkit-scrollbar-thumb,
+.hm::-webkit-scrollbar-thumb {
+  background: #dde2e6;
+  border-radius: 3px;
 }
 /* The bottom row is split between the narrow cross table and the type list. */
 .pair {
   display: grid;
-  grid-template-columns: 296px 1fr;
+  grid-template-columns: 340px 1fr;
   gap: 14px;
   min-height: 0;
 }
-/* Section by age band */
+/* Section by age band. The rows share out whatever height the card has instead of
+   sitting at a fixed size, which is what left a band of white under the table; they
+   still never squeeze below their own text, and past that the table scrolls. */
 .hm {
   display: grid;
-  grid-template-columns: 40px repeat(4, 1fr);
+  grid-template-columns: 108px repeat(4, 1fr);
+  grid-template-rows: auto;
+  grid-auto-rows: minmax(min-content, 1fr);
   gap: 2px;
-  align-content: start;
+  overflow-y: auto;
 }
 .hm .hh {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--ink3);
   font-weight: 700;
   text-align: center;
   padding-bottom: 2px;
 }
+/* Chapter names run to nine characters, so they break at spaces rather than
+   being cut with an ellipsis. */
 .hm .rl {
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 700;
+  line-height: 1.25;
+  word-break: keep-all;
   display: flex;
   align-items: center;
 }
-/* Nine planning sections is a fixed count, so the rows are sized to always fit. */
+/* The count sets the row's floor, so it is measured tight rather than at the reading
+   line height the rest of the board uses. */
 .hm .cell {
-  height: 17px;
+  line-height: 1;
   border-radius: 4px;
   display: grid;
   place-items: center;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
   /* Colour washes in exactly as the districts on the map do. */
@@ -581,7 +633,8 @@
    answering a click has to stay brisk. */
 .fill,
 .sex,
-.ax .seg {
+.ax .seg,
+.stay .seg {
   transition: width var(--dur, 0.45s) cubic-bezier(0.22, 1, 0.36, 1)
     var(--d, 0s);
 }
@@ -639,13 +692,17 @@
    than the whole list snapping into a different order. */
 .sect {
   display: grid;
-  grid-template-columns: 58px 1fr 88px;
+  grid-template-columns: 132px 1fr 88px;
   align-items: center;
   gap: 10px;
-  padding: 5px 6px;
+  padding: 4px 6px;
   border-radius: 7px;
   cursor: pointer;
   transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* The same row in the narrow card beside it. */
+.sect.tight {
+  grid-template-columns: 118px 1fr 46px;
 }
 .sect:hover {
   background: #f5f8fb;
@@ -653,9 +710,16 @@
 .sect.on {
   background: #eaf2fa;
 }
+/* Chapter names are longer than the tags they replaced. Wrapping at a space beats
+   cutting a name off, so the label keeps whole words together and takes two lines. */
 .sect .lb {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
+  line-height: 1.25;
+  word-break: keep-all;
+}
+.sect.tight .lb {
+  font-size: 11.5px;
 }
 .sect .n {
   font-size: 11.5px;
@@ -674,15 +738,74 @@
   height: 19px;
 }
 
+/* Settlement intent. Only participants who said it are counted, so the bar spans the
+   answered ones and the base is written out beneath rather than turned into a share. */
+.stay {
+  display: grid;
+  grid-template-columns: 34px 1fr 62px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+.stay .lb {
+  font-size: 12px;
+  font-weight: 700;
+}
+.stay .track {
+  height: 18px;
+  display: flex;
+  justify-content: space-between;
+}
+.stay .seg {
+  height: 100%;
+}
+.stay .seg.l {
+  background: var(--blue);
+  border-radius: 0 3px 3px 0;
+}
+.stay .seg.r {
+  background: var(--green);
+  border-radius: 3px 0 0 3px;
+}
+.stay .n {
+  font-size: 11.5px;
+  color: var(--ink3);
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+.stay .n b {
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.base {
+  margin-top: 10px;
+  font-size: 10.5px;
+  color: var(--ink3);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* The four rows share out whatever the card has rather than sitting at a fixed
+   height: pinned rows would leave a white band under the last axis here, and the
+   card is now the shorter half of the bottom row. They never squeeze below their
+   own two lines of text, which the compressed type below leaves room for. */
+.axes {
+  display: grid;
+  grid-auto-rows: minmax(min-content, 1fr);
+}
 /* Bars spreading from a centre zero end at ragged points, leaving the four axes
    impossible to compare. Every bar gets the same width on the right, with the
-   axis name and its question set large on the left. */
+   axis name and its question on the left. The name column is wide enough to hold
+   the longest question on one line — wrapping it to two would push the four rows
+   past the card and start a scrollbar. */
 .ax {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 680px;
+  grid-template-columns: 232px minmax(0, 1fr);
   align-items: center;
-  gap: 20px;
-  padding: 9px 8px;
+  gap: 14px;
+  padding: 4px 8px;
   cursor: pointer;
   border-radius: 8px;
 }
@@ -692,25 +815,29 @@
 .ax.on {
   background: #eaf2fa;
 }
+/* Both lines are set tight. At the board's reading line height the four rows need
+   more than the bottom row has, and the card may not scroll. */
 .ax .h b {
   display: block;
-  font-size: 15px;
+  font-size: 13.5px;
+  line-height: 1.25;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 .ax .h span {
   display: block;
-  font-size: 12.5px;
+  font-size: 11px;
+  line-height: 1.25;
   color: var(--ink3);
   font-weight: 600;
-  margin-top: 3px;
+  margin-top: 1px;
 }
 /* The two poles are pinned to their own ends, so at zero width they start from
    the left and right edges instead of both from the left. */
 .ax .bar {
   display: flex;
   justify-content: space-between;
-  height: 28px;
+  height: 24px;
   border-radius: 5px;
   overflow: hidden;
 }
@@ -722,70 +849,106 @@
 .ax .seg.l {
   background: var(--blue);
   border-right: 2px solid #fff;
-  padding-left: 11px;
+  padding-left: 9px;
 }
 .ax .seg.r {
   background: var(--green);
   justify-content: flex-end;
-  padding-right: 11px;
+  padding-right: 9px;
 }
 .ax .cap {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #fff;
   white-space: nowrap;
 }
 
-/* Types */
-/* The list grows with the sample, so it scrolls inside the card rather than
-   pushing the fixed stage past 1080. */
-.types {
+/* Keyword bubbles */
+/* The circles are laid out against the field's measured size, so the field takes
+   whatever the card has left and never scrolls: a spiral that ran past the box
+   would put keywords where nobody looks. */
+.bubwrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 12px;
+}
+.bubfield {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.bub {
+  position: absolute;
+  border-radius: 50%;
   display: grid;
-  align-content: start;
-  gap: 1px;
-  overflow-y: auto;
-}
-.types::-webkit-scrollbar {
-  width: 5px;
-}
-.types::-webkit-scrollbar-thumb {
-  background: #dde2e6;
-  border-radius: 3px;
-}
-.ty {
-  display: grid;
-  grid-template-columns: 274px 1fr 150px 34px;
-  gap: 10px;
-  align-items: center;
-  padding: 2px 6px;
-  border-radius: 7px;
+  place-items: center;
   cursor: pointer;
+  /* Circles swell in from nothing the way the bars grow from zero. */
+  transition: transform var(--dur, 0.45s) cubic-bezier(0.34, 1.4, 0.64, 1)
+    var(--d, 0s);
 }
-.ty:hover {
-  background: #f5f8fb;
+.bub:hover {
+  filter: brightness(0.93);
 }
-.ty.on {
-  background: #eaf2fa;
+.bub:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
-.ty .nm,
-.ty .ax4 {
+/* A picked circle wears an ink line over a white band, as the picked district on
+   the map does: the fills run from deep blue to washed teal and a single coloured
+   ring would disappear against one end of that. */
+.bub.on {
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 0 5px var(--ink);
+}
+/* A long keyword is written on two lines, so the name is a stack of its own rather
+   than one run of text. The line height stays at 1: the fit test measures the pair
+   as two boxes exactly this tall straddling the centre, and any leading would push
+   them past the chord it cleared them against. */
+.bl {
+  display: grid;
+  justify-items: center;
+  font-weight: 800;
+  line-height: 1;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  letter-spacing: -0.02em;
+  pointer-events: none;
 }
-.ty .nm {
-  font-size: 12px;
-  font-weight: 600;
-}
-.ty .ax4 {
-  font-size: 11px;
+.bubmore {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 10.5px;
   color: var(--ink3);
   font-weight: 600;
 }
-.ty .n {
-  font-size: 11.5px;
+/* Narrowed to one chapter the footnote stops being a caption and becomes the only
+   sign that the field is a fraction, so it takes the accent colour to be noticed. */
+.bubmore.narrow {
+  color: var(--blue);
   font-weight: 700;
-  text-align: right;
+}
+.bubmore .all {
+  height: 19px;
+  margin-left: 7px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink2);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.12s;
+}
+.bubmore .all:hover {
+  background: #f2f5f7;
+  color: var(--ink);
 }
 
 /* Right-hand context panel */
@@ -905,6 +1068,11 @@
   font-weight: 600;
   margin-top: 2px;
 }
+.ctx .tags {
+  color: #9aa3aa;
+  font-weight: 600;
+  word-break: keep-all;
+}
 .ctx .q {
   background: #f6f9fb;
   border-radius: 8px;
@@ -998,11 +1166,13 @@
 .hold .fill,
 .hold .sex,
 .hold .ax .seg,
+.hold .stay .seg,
 .hold .hm .cell,
 .hold .dist,
 .hold .dtext,
 .hold .onjin svg path,
-.hold .onjin b {
+.hold .onjin b,
+.hold .bub {
   transition: none;
 }
 
@@ -1010,12 +1180,14 @@
   .fill,
   .sex,
   .ax .seg,
+  .stay .seg,
   .hm .cell,
   .sect,
   .dist,
   .dtext,
   .onjin svg path,
-  .onjin b {
+  .onjin b,
+  .bub {
     transition: none;
   }
 }

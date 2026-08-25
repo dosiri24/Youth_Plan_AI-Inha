@@ -62,13 +62,22 @@ export type SelfInfo = {
   /** The 2026 district the backend resolved for aggregation, or empty. */
   normalized_region: string;
   region_table_version: string;
+  /** Filled only when the participant named a dong themselves. */
+  dong: string;
   dream_or_job: string;
+};
+
+/** A verbatim participant sentence the backend matched back to its own turn. */
+export type Quote = {
+  text: string;
+  turn: number;
 };
 
 export type Demand = {
   id: string;
   title: string;
   description: string[];
+  quotes: Quote[];
 };
 
 export type AxisDemand = {
@@ -391,14 +400,20 @@ export type TypeResultFull = {
   axes: AxisResultFull[];
 };
 
-export type Quote = {
+/** The three kinds of place the structuring call may attach to a demand. */
+export type PlaceKind = "거주지" | "활동 장소" | "문제 장소";
+
+/** A place a participant named, kept with the turn that carried it. */
+export type ReportPlace = {
   text: string;
   turn: number;
+  kind: PlaceKind;
+  /** Empty when the place could not be settled into one of the eleven districts. */
+  district: string;
 };
 
 export type DemandFull = Demand & {
-  quotes: Quote[];
-  topics: string[];
+  places: ReportPlace[];
 };
 
 export type AxisDemandFull = {
@@ -407,8 +422,23 @@ export type AxisDemandFull = {
   demands: DemandFull[];
 };
 
+/** The one demand the participant picked when asked which should come first. */
+export type TopDemand = {
+  /** Empty when the closing question never ran or the participant declined to pick. */
+  title: string;
+  reason: string[];
+  quotes: Quote[];
+  /** The axis demand this choice matched, or empty when it matched none. */
+  demand_id: string;
+};
+
+/** Each field is filled only from an explicit participant sentence, else empty. */
+export type SettlementIntent = Record<SettlementField, "인천" | "타지" | "">;
+
 export type PersonalReportFull = Omit<PersonalReport, "axis_demands"> & {
   axis_demands: AxisDemandFull[];
+  settlement: SettlementIntent;
+  top_demand: TopDemand;
   /** What the participant said about trusting the survey itself, kept verbatim. */
   participation_notes: Quote[];
 };
@@ -432,8 +462,15 @@ export type SubmissionDetail = {
   evidence_log: Evidence[];
   type_result: TypeResultFull;
   report: PersonalReportFull;
+  /** Demands found outside the four axes, and null until that pass has run. */
+  extra_demands: DemandFull[] | null;
+  /** Demand id to its plan sector, and null until the labelling call has run. */
+  sectors: Record<string, SectorLabel> | null;
   deidentified: unknown;
 };
+
+/** A sub-sector qualifies its chapter; every aggregate still counts by chapter. */
+export type SectorLabel = { sector: string; subsector: string };
 
 export type AxisPoleStat = {
   letter: AxisLetter;
@@ -480,16 +517,79 @@ export type AgeBand = {
   total: number;
 };
 
-export type TopicStat = {
-  topic: string;
+/** One chapter of the 2040 plan, which is the unit every sector aggregate counts by. */
+export type SectorStat = {
+  sector: string;
   demands: number;
   people: number;
 };
 
+/** A district a demand named. `district` is empty when it could not be settled. */
+export type DemandPlace = { text: string; district: string };
+
 export type PersonDemand = {
-  axis: AxisName;
+  /** Empty for a demand found outside the four axes by the extra-demand pass. */
+  axis: AxisName | "";
+  /** Already de-identified, as is every place text below it. */
   title: string;
-  topics: string[];
+  /** Empty until the sector labelling call has run for this submission. */
+  sector: string;
+  subsector: string;
+  /** Empty when the labelling call attached no keyword to this demand. */
+  keywords: string[];
+  /** The one demand the participant picked when asked what should come first. */
+  top: boolean;
+  places: DemandPlace[];
+};
+
+/** One keyword and how many participants said it, not how many times it was said. */
+export type KeywordStat = {
+  keyword: string;
+  /** Participants, so a keyword said twice by one person still counts once. */
+  people: number;
+  /** The plan chapter this keyword landed in most often. Never empty. */
+  sector: string;
+  /**
+   * The same head count split by plan chapter, which is what lets the bubble card
+   * narrow to one of them. Chapters where nobody tied this keyword to the chapter
+   * are left out rather than carried as zeroes, and the whole field is missing from
+   * runs analysed before it existed. Read it only through `headsIn` in
+   * `admin/keyword-bubbles.tsx`, which also covers those older runs.
+   *
+   * These do not add up to `people` and must never be summed into a denominator:
+   * one participant who raised the same keyword under two chapters counts once in
+   * `people` and once under each of the two.
+   */
+  sector_people?: Record<string, number>;
+};
+
+export type TopDemandItem = {
+  submission_id: string;
+  title: string;
+  reason: string[];
+  sector: string;
+  subsector: string;
+  /** Empty on a submission labelled before keywords joined the sector call. */
+  keywords: string[];
+};
+
+/** What each participant named when asked which one demand should come first. */
+export type TopDemands = {
+  by_sector: { sector: string; count: number }[];
+  items: TopDemandItem[];
+};
+
+export type SettlementField = "residence" | "work" | "leisure";
+
+export type SettlementCounts = { 인천: number; 타지: number };
+
+/** Only participants who said it themselves are counted, so `answered` is the base. */
+export type Settlement = {
+  residence: SettlementCounts;
+  work: SettlementCounts;
+  leisure: SettlementCounts;
+  answered: Record<SettlementField, number>;
+  participants: number;
 };
 
 export type DashboardPerson = {
@@ -498,15 +598,22 @@ export type DashboardPerson = {
   gender: Gender;
   age: number;
   region: string;
+  /** What the participant said, which survives even when `region` could not be settled. */
+  raw_region: string;
+  /** Filled only when the participant named a dong themselves. */
+  dong: string;
+  /** "인천", "타지", or empty. Submissions from before this round carry no key at all. */
+  settlement: Partial<Record<SettlementField, string>>;
   code: string;
   turns: number;
   submitted_at: string;
   summary: string;
+  /** Axis demands and extra demands in one list, and empty without a blinded copy. */
   demands: PersonDemand[];
   reasons: AxisReason[];
 };
 
-export type AiNoteCard = "map" | "topics" | "axes" | "cross" | "types";
+export type AiNoteCard = "map" | "topics" | "axes" | "cross" | "keywords";
 
 /** The four data sections of the briefing. The cover map carries no lead or read. */
 export type BriefingSectionKey = "topics" | "axes" | "cross" | "types";
@@ -540,7 +647,8 @@ export type BriefingQuote = {
   submission_id: string;
   axis: AxisName;
   letter: AxisLetter;
-  topics: string[];
+  /** Empty until the sector labelling call has run for this submission. */
+  sector: string;
   /** Empty when the interview never resolved one of the eleven districts. */
   region: string;
   /** Empty when the participant falls outside the four youth age bands. */
@@ -563,8 +671,15 @@ export type AnalysisRun = {
   kpi?: DashboardKpi;
   ages?: AgeBand[];
   regions_count?: Record<string, number>;
-  topics?: TopicStat[];
+  sectors?: SectorStat[];
+  /** Keyed by sector name, and a sector with no demands is left out entirely. */
   cross?: Record<string, number[]>;
+  top_demands?: TopDemands;
+  settlement?: Settlement;
+  /** Districts named inside demands, counted per mention rather than per participant. */
+  places?: Record<string, number>;
+  /** Every keyword, by people descending then keyword ascending. The card draws a slice. */
+  keywords?: KeywordStat[];
   people?: DashboardPerson[];
   ai_notes?: Partial<Record<AiNoteCard, string>>;
   /** Absent on runs from before the briefing, and null when its one call failed. */

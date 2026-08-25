@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.base import RequestResponseEndpoint
 
-from app import analysis, interview, prompts, report, scoring, session, store
+from app import analysis, dev, interview, prompts, report, scoring, session, store
 from app.config import get_settings
 from app.logging import configure_logging, log_event
 
@@ -127,9 +127,7 @@ app.add_middleware(
 )
 
 if get_settings().dev_mode:
-    from app.dev import router as dev_router
-
-    app.include_router(dev_router)
+    app.include_router(dev.router)
 
 
 @app.get("/health")
@@ -205,17 +203,25 @@ async def generate_result(session_id: str, request: Request) -> dict[str, object
     if current["status"] != "ended":
         raise HTTPException(status.HTTP_409_CONFLICT)
 
-    type_result = scoring.score_type(current["evidence_log"], session_id)
-    draft = await report.generate_draft(current, type_result)
-    personal_report = report.assemble(current, type_result, draft)
+    if current["fixture"]:
+        fixture = dev.load_submission_fixture(current["fixture"])
+        type_result = fixture["type_result"]
+        personal_report = fixture["report"]
+    else:
+        type_result = scoring.score_type(current["evidence_log"], session_id)
+        draft = await report.generate_draft(current, type_result)
+        personal_report = report.assemble(current, type_result, draft)
     current["type_result"] = type_result
     current["report"] = personal_report
     current["status"] = "result_ready"
-    log_event(
-        "result_generated",
-        session_id=session_id,
-        token_usage=draft.token_usage,
-    )
+    if current["fixture"]:
+        log_event("result_generated", session_id=session_id)
+    else:
+        log_event(
+            "result_generated",
+            session_id=session_id,
+            token_usage=draft.token_usage,
+        )
     _record_activity("result_view", request)
     return {
         "type_result": report.slim_type_result(type_result),
@@ -264,11 +270,17 @@ def submit_result(
     submission_id = str(uuid4())
     # Persist the full document before discarding so a save failure leaves the session retryable.
     document = _submission_document(current)
+    if current["fixture"]:
+        fixture = dev.load_submission_fixture(current["fixture"])
+        document["extra_demands"] = fixture["extra_demands"]
+        document["sectors"] = fixture["sectors"]
+        document["deidentified"] = fixture["deidentified"]
     store.get_store().save(submission_id, document)
-    background_tasks.add_task(
-        analysis.deidentify,
-        {**document, "submission_id": submission_id},
-    )
+    if not current["fixture"]:
+        background_tasks.add_task(
+            analysis.postprocess_submission,
+            {**document, "submission_id": submission_id},
+        )
     session.discard_session(session_id)
     log_event("submitted", session_id=session_id, submission_id=submission_id)
     _record_activity("submission", request)
@@ -365,6 +377,8 @@ def _submission_document(current: session.Session) -> store.Document:
         "evidence_log": current["evidence_log"],
         "type_result": current["type_result"],
         "report": current["report"],
+        "extra_demands": None,
+        "sectors": None,
         "deidentified": None,
     }
 

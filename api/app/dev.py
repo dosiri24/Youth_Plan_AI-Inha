@@ -96,6 +96,7 @@ def load_fixture(session_id: str, request: LoadRequest) -> list[TranscriptMessag
         }
         for evidence in data["evidence_log"]
     ]
+    current["fixture"] = request.name
     current["status"] = "ended"
     log_event(
         "dev_fixture_loaded",
@@ -103,6 +104,18 @@ def load_fixture(session_id: str, request: LoadRequest) -> list[TranscriptMessag
         fixture=request.name,
     )
     return [TranscriptMessage.model_validate(message) for message in current["messages"]]
+
+
+def load_submission_fixture(name: str) -> store.Document:
+    """Load one submission fixture and revive its runtime report timestamp."""
+    path = SUBMISSION_FIXTURE_DIR / f"{name}.json"
+    if not path.is_file() or path.stem != name:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    document = json.loads(path.read_text())
+    document["report"]["meta"]["created_at"] = datetime.fromisoformat(
+        document["report"]["meta"]["created_at"]
+    )
+    return document
 
 
 def _message(

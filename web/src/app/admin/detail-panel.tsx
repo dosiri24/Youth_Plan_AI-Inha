@@ -16,11 +16,10 @@ import type {
 import styles from "./dashboard.module.css";
 import {
   AI_CARD_TITLES,
-  SECTIONS,
   axisTitle,
   AXIS_QUESTION,
   regionLabel,
-  spellCode,
+  sectorLabel,
 } from "./dashboard-data";
 
 type AdminGuide = {
@@ -38,10 +37,11 @@ type AdminGuide = {
 const GUIDE = adminGuide as AdminGuide;
 
 export type Selection =
-  | { kind: "topic"; topic: string }
+  | { kind: "sector"; sector: string }
+  | { kind: "top"; sector: string }
   | { kind: "axis"; axis: AxisName }
   | { kind: "region"; region: string }
-  | { kind: "type"; code: string }
+  | { kind: "keyword"; keyword: string }
   | { kind: "person"; submissionId: string }
   | { kind: "ai"; card: AiNoteCard };
 
@@ -54,42 +54,82 @@ type Props = {
   onSelectPerson: (submissionId: string) => void;
 };
 
-function Pills({ topics }: { topics: string[] }) {
-  return (
-    <>
-      {topics.map((topic) => (
-        <span className={styles.pill} key={topic}>
-          {topic}
-        </span>
-      ))}
-    </>
-  );
+/** A demand carries one sector, so the only thing left to badge is its sub-sector. */
+function Pill({ label }: { label: string }) {
+  return label ? <span className={styles.pill}>{label}</span> : null;
 }
 
-function topicView(run: AnalysisRun, topic: string): View {
+/* Inside a chapter panel the sub-sector badge repeats down the whole list, so the
+   keywords ride beside it to carry what actually differs from row to row. They stay
+   bare text: a second filled badge would compete with the classification for the eye. */
+function Tags({ keywords }: { keywords: string[] }) {
+  return keywords.length ? (
+    <span className={styles.tags}>
+      {keywords.map((keyword) => `#${keyword}`).join(" ")}
+    </span>
+  ) : null;
+}
+
+function sectorView(run: AnalysisRun, sector: string): View {
   const people = run.people ?? [];
-  const stat = run.topics?.find((item) => item.topic === topic);
+  const stat = run.sectors?.find((item) => item.sector === sector);
   const items = people.flatMap((person) =>
     person.demands
-      .filter((demand) => demand.topics.includes(topic))
+      .filter((demand) => demand.sector === sector)
       .map((demand) => ({ person, demand })),
   );
 
   return {
     label: "계획 부문",
-    title: `${topic} · ${SECTIONS[topic]}`,
+    title: sector,
     sub: `요구 ${stat?.demands ?? 0}건 · ${run.kpi?.participants ?? 0}명 중 ${
       stat?.people ?? 0
     }명이 언급`,
     body: (
       <>
         <h4>이 부문으로 들어온 요구</h4>
-        {items.map(({ person, demand }, index) => (
-          <div className={styles.li} key={`${person.submission_id}-${index}`}>
-            {demand.title}
+        {items.length === 0 ? (
+          <div className={styles.li}>이 부문으로 들어온 요구가 없습니다.</div>
+        ) : (
+          items.map(({ person, demand }, index) => (
+            <div className={styles.li} key={`${person.submission_id}-${index}`}>
+              {demand.title}
+              <div className={styles.m}>
+                {regionLabel(person.region)} · {person.age}세{" "}
+                <Pill label={demand.subsector} />
+                <Tags keywords={demand.keywords} />
+              </div>
+            </div>
+          ))
+        )}
+      </>
+    ),
+  };
+}
+
+function topDemandView(run: AnalysisRun, sector: string): View {
+  const items = (run.top_demands?.items ?? []).filter(
+    (item) => item.sector === sector,
+  );
+
+  return {
+    label: "최우선 요구",
+    title: sector,
+    sub: `이 부문을 먼저 꼽은 참여자 ${items.length}명`,
+    body: (
+      <>
+        <h4>참여자가 하나만 고른다면</h4>
+        {items.map((item) => (
+          <div className={styles.li} key={item.submission_id}>
+            {item.title}
+            {item.reason.map((sentence, index) => (
+              <div className={styles.m} key={index}>
+                {sentence}
+              </div>
+            ))}
             <div className={styles.m}>
-              {regionLabel(person.region)} · {person.age}세{" "}
-              <Pills topics={demand.topics.filter((item) => item !== topic)} />
+              <Pill label={item.subsector} />
+              <Tags keywords={item.keywords} />
             </div>
           </div>
         ))}
@@ -205,7 +245,8 @@ function regionView(
             <div className={styles.li} key={`${person.submission_id}-${index}`}>
               {demand.title}
               <div className={styles.m}>
-                {person.nickname} · <Pills topics={demand.topics} />
+                {person.nickname} ·{" "}
+                <Pill label={sectorLabel(demand.sector, demand.subsector)} />
               </div>
             </div>
           )),
@@ -217,27 +258,36 @@ function regionView(
   };
 }
 
-function typeView(run: AnalysisRun, code: string): View {
-  const people = (run.people ?? []).filter((person) => person.code === code);
-  const type = getCityType(code);
+function keywordView(run: AnalysisRun, keyword: string): View {
+  const stat = run.keywords?.find((item) => item.keyword === keyword);
+  const items = (run.people ?? []).flatMap((person) =>
+    person.demands
+      .filter((demand) => demand.keywords.includes(keyword))
+      .map((demand) => ({ person, demand })),
+  );
 
   return {
-    label: "청년이 바라는 도시유형",
-    title: type.nickname,
-    sub: `${spellCode(code)} · ${run.type_distribution[code] ?? 0}명`,
+    label: "요구 키워드",
+    title: keyword,
+    sub: `${run.kpi?.participants ?? 0}명 중 ${stat?.people ?? 0}명이 말함 · ${
+      stat?.sector ?? ""
+    }`,
     body: (
       <>
-        <h4>이 유형의 뜻</h4>
-        <div className={styles.li}>{type.description}</div>
-        <h4>이 유형의 참여자</h4>
-        {people.map((person) => (
-          <div className={styles.li} key={person.submission_id}>
-            {person.summary}
-            <div className={styles.m}>
-              {person.nickname} · {regionLabel(person.region)} · {person.age}세
+        <h4>이 키워드가 붙은 요구 {items.length}건</h4>
+        {items.length === 0 ? (
+          <div className={styles.li}>이 키워드가 붙은 요구가 없습니다.</div>
+        ) : (
+          items.map(({ person, demand }, index) => (
+            <div className={styles.li} key={`${person.submission_id}-${index}`}>
+              {demand.title}
+              <div className={styles.m}>
+                {regionLabel(person.region)} · {person.age}세{" "}
+                <Pill label={sectorLabel(demand.sector, demand.subsector)} />
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </>
     ),
   };
@@ -271,7 +321,7 @@ function personView(person: DashboardPerson): View {
             <div className={styles.li} key={index}>
               {demand.title}
               <div className={styles.m}>
-                <Pills topics={demand.topics} />
+                <Pill label={sectorLabel(demand.sector, demand.subsector)} />
               </div>
             </div>
           ))
@@ -315,14 +365,16 @@ function buildView(
   onSelectPerson: (submissionId: string) => void,
 ): View | null {
   switch (selection.kind) {
-    case "topic":
-      return topicView(run, selection.topic);
+    case "sector":
+      return sectorView(run, selection.sector);
+    case "top":
+      return topDemandView(run, selection.sector);
     case "axis":
       return axisView(run, selection.axis);
     case "region":
       return regionView(run, selection.region, onSelectPerson);
-    case "type":
-      return typeView(run, selection.code);
+    case "keyword":
+      return keywordView(run, selection.keyword);
     case "ai":
       return aiView(run, selection.card);
     case "person": {

@@ -13,7 +13,8 @@ _BEGIN_FUTURE = (
     "(이미 2040년 이야기를 나누고 있다면 따르지 않아도 됨)"
 )
 _BEGIN_CLOSING = "인터뷰 루브릭에 설명된 정리 순서로 넘어갈 것"
-# Topics quote the rubric's four target qualities, so the interviewer maps them without axis names.
+# Topics describe each axis in plain words; the rubric no longer enumerates them,
+# so runtime hints are the interviewer's only source of coverage targets.
 AXIS_HINT_TOPICS = {
     "AC": "동네와 거리가 얼마나 활발히 돌아가기를 바라는지",
     "UN": "어떤 풍경 속에서 살고 싶은지",
@@ -48,7 +49,14 @@ def load_scoring_instruction() -> str:
 
 @lru_cache
 def load_report_prompt(
-    name: Literal["structuring.md", "deidentify.md", "aggregate.md", "briefing.md"],
+    name: Literal[
+        "structuring.md",
+        "extra.md",
+        "sectors.md",
+        "deidentify.md",
+        "aggregate.md",
+        "briefing.md",
+    ],
 ) -> str:
     """Load one report-pipeline prompt without embedding instructions in code."""
     return (_PROMPT_DIR / name).read_text(encoding="utf-8")

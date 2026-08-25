@@ -15,11 +15,11 @@ import { AXIS_INFO, getPoleBadge } from "@/lib/city-axes";
 import styles from "./quote-layer.module.css";
 import tokens from "./tokens.module.css";
 
-type Mode = "axis" | "topic" | "region" | "age";
+type Mode = "axis" | "sector" | "region" | "age";
 
 const MODES: { value: Mode; label: string }[] = [
   { value: "axis", label: "도시가치 축" },
-  { value: "topic", label: "계획 부문" },
+  { value: "sector", label: "계획 부문" },
   { value: "region", label: "군·구" },
   { value: "age", label: "연령대" },
 ];
@@ -27,20 +27,12 @@ const MODES: { value: Mode; label: string }[] = [
 const UNKNOWN = "(미확인)";
 
 /* Contract orders, so a browsing officer meets the groups in the same sequence
-   every time. Districts have none: they are ordered by how many quotes they hold. */
+   every time. Districts and plan sectors have none: districts because the contract
+   never fixed one, sectors because their names belong to the analysis payload
+   rather than to this screen. Both fall back to how many quotes they hold. */
 const ORDER: Record<Mode, string[]> = {
   axis: ["AC", "UN", "OW", "FH"],
-  topic: [
-    "일자리",
-    "주거",
-    "교통",
-    "문화",
-    "환경",
-    "돌봄",
-    "안전",
-    "교육",
-    "상권",
-  ],
+  sector: [],
   region: [],
   age: ["19~24", "25~29", "30~34", "35~39"],
 };
@@ -51,13 +43,13 @@ const FOCUSABLE = "a[href], button:not([disabled]), input:not([disabled])";
 
 type Group = { key: string; label: string; items: BriefingQuote[] };
 
-/** A quote can carry several topics, so grouping by section returns keys, not one. */
-function keysOf(quote: BriefingQuote, mode: Mode): string[] {
-  if (mode === "axis") return [quote.axis];
-  if (mode === "topic")
-    return quote.topics.length > 0 ? quote.topics : [UNKNOWN];
-  if (mode === "region") return [quote.region || UNKNOWN];
-  return [quote.age_band || UNKNOWN];
+/** Every mode reduces to one key, and an unlabelled quote still has to be findable. */
+function keyOf(quote: BriefingQuote, mode: Mode): string {
+  // A demand found outside the four axes carries no axis, and it still belongs here.
+  if (mode === "axis") return quote.axis || UNKNOWN;
+  if (mode === "sector") return quote.sector || UNKNOWN;
+  if (mode === "region") return quote.region || UNKNOWN;
+  return quote.age_band || UNKNOWN;
 }
 
 function labelOf(key: string, mode: Mode): string {
@@ -76,11 +68,10 @@ function rankOf(key: string, mode: Mode): number {
 function group(quotes: BriefingQuote[], mode: Mode): Group[] {
   const bins = new Map<string, BriefingQuote[]>();
   for (const quote of quotes) {
-    for (const key of keysOf(quote, mode)) {
-      const bin = bins.get(key);
-      if (bin) bin.push(quote);
-      else bins.set(key, [quote]);
-    }
+    const key = keyOf(quote, mode);
+    const bin = bins.get(key);
+    if (bin) bin.push(quote);
+    else bins.set(key, [quote]);
   }
 
   return [...bins.entries()]
@@ -247,11 +238,13 @@ export function QuoteLayer({
                     <p className={styles.demand}>{quote.demand_title}</p>
                     <div className={styles.meta}>
                       <span className={styles.axis}>
-                        {AXIS_INFO[quote.axis].title}
+                        {quote.axis ? AXIS_INFO[quote.axis].title : "축 밖의 요구"}
                       </span>
-                      <span className={styles.badge}>
-                        {getPoleBadge(quote.axis, quote.letter)}
-                      </span>
+                      {quote.axis && (
+                        <span className={styles.badge}>
+                          {getPoleBadge(quote.axis, quote.letter)}
+                        </span>
+                      )}
                       <span>{quote.region || UNKNOWN}</span>
                       <span>
                         {quote.age_band ? `${quote.age_band}세` : UNKNOWN}

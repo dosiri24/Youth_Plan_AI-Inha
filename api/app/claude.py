@@ -23,7 +23,5 @@ def token_usage(usage: object | None) -> dict[str, int] | None:
         "cache_creation_input_tokens",
         "cache_read_input_tokens",
     )
-    counters = {
-        name: value for name in names if type(value := getattr(usage, name, None)) is int
-    }
+    counters = {name: value for name in names if type(value := getattr(usage, name, None)) is int}
     return counters or None

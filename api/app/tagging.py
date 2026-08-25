@@ -1,14 +1,17 @@
+import asyncio
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from google.genai import types
+from google.genai import errors, types
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 from app import gemini, session
 from app.axes import AXIS_NAMES, AXIS_POLES, EVIDENCE_WEIGHTS, SCORING_AXES, Evidence
 from app.config import get_settings
+from app.logging import log_event
 from app.prompts import load_scoring_instruction
 
 AxisName = Literal[*AXIS_NAMES]
@@ -16,6 +19,10 @@ PoleName = Literal[*tuple(pole for _axis, poles, _default in SCORING_AXES for po
 # A Literal would emit an integer enum, which Gemini's Schema type accepts only as strings.
 Weight = Annotated[int, Field(ge=min(EVIDENCE_WEIGHTS), le=max(EVIDENCE_WEIGHTS))]
 TokenUsage = dict[str, int] | None
+SCORING_CACHE_TTL = "3600s"
+
+_scoring_cache: types.CachedContent | None = None
+_scoring_cache_lock = asyncio.Lock()
 
 
 class StrictModel(BaseModel):
@@ -65,21 +72,101 @@ async def tag(
         ensure_ascii=False,
         separators=(",", ":"),
     )
-    config = types.GenerateContentConfig(
-        system_instruction=load_scoring_instruction(),
-        response_mime_type="application/json",
-        response_schema=EvidenceResponse,
-    )
-    response = await gemini.get_client().aio.models.generate_content(
-        model=get_settings().gemini_model,
-        contents=contents,
-        config=config,
-    )
+    response = await _generate(contents)
     evidence, issues = _parse(response.text, turn)
     return TagResult(
         evidence=evidence,
         issues=issues,
         token_usage=gemini.token_usage(response.usage_metadata),
+    )
+
+
+async def _generate(contents: str) -> types.GenerateContentResponse:
+    """Generate one scoring response with the shared explicit cache when available."""
+    cache_name = await _get_scoring_cache()
+    try:
+        return await _generate_with_cache(contents, cache_name)
+    except errors.ClientError as exc:
+        if cache_name is None or exc.code != 404:
+            raise
+    cache_name = await _get_scoring_cache(invalid_name=cache_name)
+    return await _generate_with_cache(contents, cache_name)
+
+
+async def _generate_with_cache(
+    contents: str,
+    cache_name: str | None,
+) -> types.GenerateContentResponse:
+    """Preserve the scoring response contract with or without a cache reference."""
+    config = types.GenerateContentConfig(
+        system_instruction=None if cache_name else load_scoring_instruction(),
+        cached_content=cache_name,
+        response_mime_type="application/json",
+        response_schema=EvidenceResponse,
+    )
+    return await gemini.get_client().aio.models.generate_content(
+        model=get_settings().gemini_model,
+        contents=contents,
+        config=config,
+    )
+
+
+async def _get_scoring_cache(invalid_name: str | None = None) -> str | None:
+    """Return the live process-global scoring cache or create it lazily."""
+    global _scoring_cache
+    if invalid_name is None and _cache_is_live(_scoring_cache):
+        return _scoring_cache.name
+
+    async with _scoring_cache_lock:
+        if invalid_name is None and _cache_is_live(_scoring_cache):
+            return _scoring_cache.name
+        if (
+            invalid_name is not None
+            and _cache_is_live(_scoring_cache)
+            and _scoring_cache.name != invalid_name
+        ):
+            return _scoring_cache.name
+
+        reason = "invalid_reference" if invalid_name else "expired" if _scoring_cache else None
+        try:
+            cache = await gemini.get_client().aio.caches.create(
+                model=get_settings().gemini_model,
+                config=types.CreateCachedContentConfig(
+                    display_name="interview scoring axes",
+                    system_instruction=load_scoring_instruction(),
+                    ttl=SCORING_CACHE_TTL,
+                ),
+            )
+            if cache.name is None:
+                raise ValueError("Gemini cache response has no resource name")
+        except Exception as exc:
+            _scoring_cache = None
+            log_event(
+                "scoring_cache_failed",
+                model=get_settings().gemini_model,
+                reason=reason or "initial",
+                error_type=type(exc).__name__,
+            )
+            return None
+
+        _scoring_cache = cache
+        event = "scoring_cache_recreated" if reason else "scoring_cache_created"
+        log_event(
+            event,
+            token_usage=gemini.token_usage(cache.usage_metadata),
+            model=get_settings().gemini_model,
+            **({"reason": reason} if reason else {}),
+        )
+        return cache.name
+
+
+def _cache_is_live(cache: types.CachedContent | None) -> bool:
+    """Return whether a cache has a usable name and future expiry."""
+    return bool(
+        cache is not None
+        and cache.name
+        and cache.expire_time
+        and cache.expire_time > datetime.now(UTC)
     )
 
 

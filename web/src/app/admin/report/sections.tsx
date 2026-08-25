@@ -13,13 +13,12 @@ import type {
   BriefingImplication,
   BriefingQuote,
   BriefingTension,
-  TopicStat,
+  SectorStat,
 } from "@/lib/api";
 
 import {
   AGE_BANDS,
   AXIS_QUESTION,
-  SECTIONS,
   axisTitle,
   spellCode,
 } from "../dashboard-data";
@@ -122,9 +121,9 @@ export function QuoteText({ quote }: { quote: BriefingQuote }) {
 /** The reference original picked its fallback quote at random and lost reproducibility. */
 function firstQuote(
   quotes: BriefingQuote[],
-  topic: string,
+  sector: string,
 ): BriefingQuote | null {
-  const matches = quotes.filter((quote) => quote.topics.includes(topic));
+  const matches = quotes.filter((quote) => quote.sector === sector);
   if (matches.length === 0) return null;
 
   return matches.reduce((best, quote) =>
@@ -231,25 +230,25 @@ export function MethodSection({ sample }: { sample: string | undefined }) {
   );
 }
 
-export function TopicSection({
+export function SectorSection({
   lead,
   participants,
   quotes,
   read,
-  topics,
+  sectors,
 }: {
   lead: string | undefined;
   participants: number;
   quotes: BriefingQuote[];
   read: string | undefined;
-  topics: TopicStat[] | undefined;
+  sectors: SectorStat[] | undefined;
 }) {
   const [active, setActive] = useState<string | null>(null);
   const base = useId();
 
-  const rows = [...(topics ?? [])].sort(
+  const rows = [...(sectors ?? [])].sort(
     (left, right) =>
-      right.demands - left.demands || left.topic.localeCompare(right.topic),
+      right.demands - left.demands || left.sector.localeCompare(right.sector),
   );
   const max = Math.max(1, ...rows.map((row) => row.demands));
 
@@ -270,26 +269,23 @@ export function TopicSection({
           <>
             <ul className={styles.rows}>
               {rows.map((row, index) => {
-                const id = `${base}-${row.topic}`;
-                const open = active === row.topic;
-                const quote = firstQuote(quotes, row.topic);
+                const id = `${base}-${row.sector}`;
+                const open = active === row.sector;
+                const quote = firstQuote(quotes, row.sector);
 
                 return (
-                  <li key={row.topic}>
+                  <li key={row.sector}>
                     <button
                       /* Spelled out, because the three cells run together into
                          one unpunctuated string when read aloud. */
-                      aria-label={`${row.topic}, 담당 ${SECTIONS[row.topic]}, 요구 ${row.demands}건, ${row.people}명이 언급`}
+                      aria-label={`${row.sector}, 요구 ${row.demands}건, ${row.people}명이 언급`}
                       aria-controls={id}
                       aria-expanded={open}
                       className={styles.row}
-                      onClick={() => setActive(open ? null : row.topic)}
+                      onClick={() => setActive(open ? null : row.sector)}
                       type="button"
                     >
-                      <span className={styles.rowlabel}>
-                        {row.topic}
-                        <em>{SECTIONS[row.topic]}</em>
-                      </span>
+                      <span className={styles.rowlabel}>{row.sector}</span>
                       <span className={styles.track}>
                         <Fill index={index} max={max} value={row.demands} />
                       </span>
@@ -313,9 +309,9 @@ export function TopicSection({
               })}
             </ul>
             <p className={styles.caption}>
-              막대는 부문별 요구 건수를 비교합니다. 부문 이름 아래는 담당
-              부서이고, 뒤의 인원은 참여자 {participants}명 가운데 그 부문을
-              언급한 사람 수입니다. 부문을 누르면 대표 인용이 펼쳐집니다.
+              막대는 부문별 요구 건수를 비교합니다. 뒤의 인원은 참여자{" "}
+              {participants}명 가운데 그 부문을 언급한 사람 수입니다. 부문을
+              누르면 대표 인용이 펼쳐집니다.
             </p>
           </>
         )}
@@ -388,7 +384,7 @@ export function AxisSection({
                         <span className={styles.polenum}>
                           {pole.count === 0
                             ? "판정된 참여자 없음"
-                            : `${pole.count}명 · 판정 강도 평균 ${pole.mean_strength}`}
+                            : `${pole.count}명 · 평균 ${pole.mean_strength}%`}
                         </span>
                         <span className={styles.mtrack}>
                           <Fill
@@ -445,9 +441,8 @@ export function AxisSection({
             <p className={styles.caption}>
               좌우 막대는 같은 축의 두 극을 마주 놓은 것이고, 길이는 인원이 가장
               많은 극({max}명)에 대한 상대 길이입니다. 두 색은 좋음과 나쁨이
-              아니라 대등한 선호를 가리킵니다. 판정 강도는 백분율이 아니라 그
-              극으로 얼마나 치우쳐 판정됐는지를 51~100으로 나타낸 값이며, 증거가
-              없어 기본 극으로 채워진 축은 이 집계에 들어가지 않습니다.
+              아니라 대등한 선호를 가리킵니다. 증거가 없어 기본 극으로 채워진
+              축은 이 집계에 들어가지 않습니다.
             </p>
           </>
         )}
@@ -537,15 +532,18 @@ export function CrossSection({
   lead,
   participants,
   read,
-  topics,
+  sectors,
 }: {
   ages: AgeBand[] | undefined;
   cross: Record<string, number[]> | undefined;
   lead: string | undefined;
   participants: number;
   read: string | undefined;
-  topics: TopicStat[] | undefined;
+  sectors: SectorStat[] | undefined;
 }) {
+  // A sector with no demands is left out of `cross` entirely, so the rows follow it.
+  const rows = (sectors ?? []).filter((row) => cross?.[row.sector]);
+
   return (
     <Band>
       <div className={styles.read}>
@@ -594,7 +592,7 @@ export function CrossSection({
         )}
 
         <h3 className={styles.wideh3}>계획 부문과 연령대의 교차</h3>
-        {topics?.length && cross ? (
+        {rows.length && cross ? (
           <>
             <div className={styles.scroller}>
               <table className={`${styles.table} ${styles.crosstable}`}>
@@ -609,12 +607,12 @@ export function CrossSection({
                   </tr>
                 </thead>
                 <tbody>
-                  {topics.map((row) => (
-                    <tr key={row.topic}>
-                      <th scope="row">{row.topic}</th>
+                  {rows.map((row) => (
+                    <tr key={row.sector}>
+                      <th scope="row">{row.sector}</th>
                       {AGE_BANDS.map((band, index) => (
                         <td key={band}>
-                          {(cross[row.topic] ?? [])[index] ?? 0}건
+                          {(cross[row.sector] ?? [])[index] ?? 0}건
                         </td>
                       ))}
                     </tr>
@@ -719,13 +717,7 @@ export function ImplicationSection({
           <ul className={styles.implications}>
             {implications.map((item) => (
               <li key={item.question}>
-                <span className={styles.badge}>
-                  {item.topic}
-                  {/* Several sectors are named after their own department. */}
-                  {SECTIONS[item.topic] && SECTIONS[item.topic] !== item.topic
-                    ? ` · ${SECTIONS[item.topic]}`
-                    : ""}
-                </span>
+                <span className={styles.badge}>{item.topic}</span>
                 <Rich className={styles.serif} html={item.question} />
               </li>
             ))}

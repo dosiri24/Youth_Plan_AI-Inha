@@ -1,6 +1,10 @@
 from google import genai
+from google.genai import types
 
 from app.config import get_settings
+
+REQUEST_TIMEOUT_MS = 120_000
+RETRY_ATTEMPTS = 2
 
 _client: genai.Client | None = None
 
@@ -9,7 +13,15 @@ def get_client() -> genai.Client:
     """Return the lazily constructed Gemini client."""
     global _client
     if _client is None:
-        _client = genai.Client(api_key=get_settings().gemini_api_key)
+        # The SDK otherwise creates httpx without a timeout and disables retries, so a
+        # stalled response could block an admin request; two attempts fit Cloud Run's 300s limit.
+        _client = genai.Client(
+            api_key=get_settings().gemini_api_key,
+            http_options=types.HttpOptions(
+                timeout=REQUEST_TIMEOUT_MS,
+                retry_options=types.HttpRetryOptions(attempts=RETRY_ATTEMPTS),
+            ),
+        )
     return _client
 
 
