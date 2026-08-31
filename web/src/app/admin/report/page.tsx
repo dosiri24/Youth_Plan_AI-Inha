@@ -142,9 +142,9 @@ export default function Report() {
         <Band>
           <div className={styles.read}>
             <p className={styles.eyebrow}>유스플랜AI 종합 브리핑</p>
-            <h1>청년이 바라는 2040년 인천</h1>
+            <h1>청년이 바라는 2045년 인천</h1>
             <p className={styles.sub}>
-              2040 인천도시기본계획을 위한 청년 의견 수렴 결과
+              2045 인천도시기본계획을 위한 청년 의견 수렴 결과
             </p>
             <p className={styles.stamp}>
               {formatStamp(run.executed_at)} 기준 분석

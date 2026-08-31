@@ -221,7 +221,7 @@ export default function Dashboard() {
       ),
       kpi ? "곳" : "",
     ],
-    ["활용 계획", "2040 인천도시기본계획", ""],
+    ["활용 계획", "2045 인천도시기본계획", ""],
   ];
 
   const ageMax = Math.max(1, ...(ages ?? []).map((band) => band.total));

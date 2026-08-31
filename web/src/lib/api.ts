@@ -55,7 +55,7 @@ export type Gender = "male" | "female" | "other";
 export type SelfInfo = {
   nickname: string;
   birth_year: number;
-  age_2040: number;
+  age_2045: number;
   gender: Gender;
   /** What the participant actually said; the backend never corrects it. */
   raw_region: string;

@@ -504,8 +504,8 @@ function SubmissionBody({ detail }: { detail: SubmissionDetail }) {
           </span>
         </div>
         <p className="mt-1.5 text-[14px] text-muted-foreground">
-          {regionLabel(self_info.normalized_region)} · 2040년{" "}
-          {self_info.age_2040}세 · {GENDER_LABEL[self_info.gender]} ·{" "}
+          {regionLabel(self_info.normalized_region)} · 2045년{" "}
+          {self_info.age_2045}세 · {GENDER_LABEL[self_info.gender]} ·{" "}
           {self_info.dream_or_job} · {formatDateTime(detail.submitted_at)}
         </p>
         {/* The words the participant used survive even when no district resolved. */}

@@ -13,7 +13,7 @@ function StoryOverview({ report }: ReportOverviewProps) {
   const details = [
     ["별명", info.nickname],
     ["출생연도", `${info.birth_year}년`],
-    ["2040년의 나이", `${info.age_2040}세`],
+    ["2045년의 나이", `${info.age_2045}세`],
     ["거주 지역", info.raw_region],
     ["꿈 또는 일", info.dream_or_job],
   ];

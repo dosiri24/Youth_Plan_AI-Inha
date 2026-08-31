@@ -8,10 +8,6 @@ _PROMPT_DIR = Path(__file__).resolve().parents[1] / "prompts"
 _INTERVIEW_PROMPT_NAMES = ("system.md", "rubric.md")
 _FINGERPRINT_LENGTH = 12
 _KEEP_GOING = "아직 인터뷰를 마무리하지 말고 대화를 계속할 것"
-_BEGIN_FUTURE = (
-    "지금의 하루 이야기는 충분히 들었으니 이번 응답에서 2040년의 하루로 넘어가는 전환을 시작할 것"
-    "(이미 2040년 이야기를 나누고 있다면 따르지 않아도 됨)"
-)
 _BEGIN_CLOSING = "인터뷰 루브릭에 설명된 정리 순서로 넘어갈 것"
 # Topics describe each axis in plain words; the rubric no longer enumerates them,
 # so runtime hints are the interviewer's only source of coverage targets.
@@ -19,7 +15,7 @@ AXIS_HINT_TOPICS = {
     "AC": "동네와 거리가 얼마나 활발히 돌아가기를 바라는지",
     "UN": "어떤 풍경 속에서 살고 싶은지",
     "OW": "도시가 무엇을 먼저 챙기기를 바라는지",
-    "FH": "도시가 변할 때 무엇을 지키고 무엇을 바꾸기를 바라는지",
+    "FH": "도시가 변해 갈 때 어떤 방식이기를 바라는지",
 }
 PacingMode = Literal["continue", "extend", "closing"]
 
@@ -63,11 +59,11 @@ def load_report_prompt(
 
 
 @lru_cache
-def build_fixed_prefix(age_2040: int) -> str:
+def build_fixed_prefix(age_2045: int) -> str:
     """Build the stable interviewer system instruction for one participant age."""
     system_prompt, rubric = load_prompt_assets()
     # Age is the only per-participant value, so it trails the shared assets to widen cache reuse.
-    participant_info = f"[참여자 정보]\n2040년 추정 나이: 약 {age_2040}세"
+    participant_info = f"[참여자 정보]\n2045년 추정 나이: 약 {age_2045}세"
     # The 2040 plan summary is not here: it was never quoted, and its policy vocabulary
     # pulled the interviewer toward asking a citizen for administrative answers.
     # XML tags mark the section boundaries so the model parses each asset unambiguously.
@@ -94,7 +90,6 @@ def build_operational_instruction(
     mode: PacingMode,
     hint_topic: str | None = None,
     retry: bool = False,
-    future: bool = False,
 ) -> str:
     """Build one pacing and optional coverage instruction block."""
     if mode == "closing":
@@ -107,8 +102,6 @@ def build_operational_instruction(
         return _format_operational_instruction(instructions)
 
     instructions = [_KEEP_GOING]
-    if future:
-        instructions.append(_BEGIN_FUTURE)
     if hint_topic:
         if retry:
             instructions.append(
@@ -119,11 +112,14 @@ def build_operational_instruction(
         elif mode == "extend":
             instructions.append(
                 "다음 성질의 이야기를 오늘 거의 듣지 못했음. 이번 응답에서는 그 성질이 드러날 "
-                f"2040년의 장면을 하나 골라 물을 것: {hint_topic}"
+                f"2045년의 장면을 하나 골라 물을 것: {hint_topic}"
             )
         else:
             instructions.append(
-                "이번 응답에서는 다음 성질이 드러날 장면을 하나 물어볼 것"
+                "다음 성질이 드러날 장면을 물을 기회를 찾을 것. 참여자가 방금 꺼낸 이야기나 "
+                "루브릭의 장면 목록에 붙일 수 있을 때만 이번 응답에서 그 장면을 열고, 붙일 데가 "
+                "없으면 참여자를 따라가고 이 성질은 다음 기회로 미룰 것. 성질의 문구를 질문에 "
+                "옮겨 적지 말 것"
                 f"(이미 그 이야기가 나왔다면 따르지 않아도 됨): {hint_topic}"
             )
     return _format_operational_instruction(instructions)
@@ -134,8 +130,7 @@ def append_operational_instruction(
     mode: PacingMode,
     hint_topic: str | None = None,
     retry: bool = False,
-    future: bool = False,
 ) -> str:
     """Append backend guidance after every participant utterance."""
-    instruction = build_operational_instruction(mode, hint_topic, retry, future)
+    instruction = build_operational_instruction(mode, hint_topic, retry)
     return f"{text}\n{instruction}"

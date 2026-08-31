@@ -18,12 +18,12 @@ from app.trailer import TrailerParser
 
 # Fixed backend replies, so the model never counts violations or writes the closing itself.
 MALICIOUS_WARNING = (
-    "이런 말씀이 반복되면 대화가 자동으로 종료됩니다. 2040년 인천 이야기로 돌아가 주세요."
+    "이런 말씀이 반복되면 대화가 자동으로 종료됩니다. 2045년 인천 이야기로 돌아가 주세요."
 )
 MALICIOUS_ABORT = "같은 발화가 반복되어 인터뷰를 종료합니다."
 MALICIOUS_LIMIT = 2
 NON_RESIDENT_NOTICE = (
-    "아쉽지만 이 인터뷰는 인천에 살고 계신 분들을 대상으로 하고 있어요. "
+    "아쉽지만 이 인터뷰는 인천과 인연이 있는 분들을 대상으로 하고 있어요. "
     "관심 가져 주셔서 감사합니다."
 )
 
@@ -45,10 +45,8 @@ async def _run(
 ) -> AsyncIterator[str]:
     """Execute one interview turn and emit participant-safe SSE events."""
     settings = get_settings()
-    mode, hint_topic, retry, future = (
-        _pacing(current, turn, settings)
-        if user_text is not None
-        else ("continue", None, False, False)
+    mode, hint_topic, retry = (
+        _pacing(current, turn, settings) if user_text is not None else ("continue", None, False)
     )
     scoring_task = _start_scoring(current, user_text, turn)
     try:
@@ -63,7 +61,6 @@ async def _run(
             mode,
             hint_topic,
             retry,
-            future,
         ):
             if current_usage is not None:
                 token_usage = current_usage
@@ -157,7 +154,7 @@ def _pacing(
     current: session.Session,
     turn: int,
     settings: Settings,
-) -> tuple[prompts.PacingMode, str | None, bool, bool]:
+) -> tuple[prompts.PacingMode, str | None, bool]:
     """Choose one pacing mode and any uncovered-axis guidance for this turn."""
     covered = {item["axis"] for item in current["evidence_log"]}
     uncovered = [axis for axis in AXIS_NAMES if axis not in covered]
@@ -168,13 +165,9 @@ def _pacing(
         mode = "extend"
     else:
         mode = "closing"
-    future = mode == "continue" and turn == settings.interview_future_turn
-    if future:
-        log_event("future_transition", session_id=current["session_id"], turn=turn)
-
     if mode == "closing":
         if not uncovered:
-            return mode, None, False, future
+            return mode, None, False
         axis = uncovered[0]
         log_event(
             "axis_hint",
@@ -184,10 +177,10 @@ def _pacing(
             closing=True,
             mode=mode,
         )
-        return mode, prompts.AXIS_HINT_TOPICS[axis], False, future
+        return mode, prompts.AXIS_HINT_TOPICS[axis], False
 
     if mode == "continue" and turn < settings.interview_hint_turn:
-        return mode, None, False, future
+        return mode, None, False
 
     axis_order = {axis: index for index, axis in enumerate(AXIS_NAMES)}
     ordered = sorted(
@@ -213,7 +206,7 @@ def _pacing(
             axis=deferred_axis,
         )
     if not eligible:
-        return mode, None, False, future
+        return mode, None, False
 
     axis = eligible[0]
     attempts = current["axis_hints"].get(axis, [])
@@ -228,7 +221,7 @@ def _pacing(
         attempt=len(attempts),
         mode=mode,
     )
-    return mode, prompts.AXIS_HINT_TOPICS[axis], retry, future
+    return mode, prompts.AXIS_HINT_TOPICS[axis], retry
 
 
 def _text_stream(
@@ -238,7 +231,6 @@ def _text_stream(
     mode: prompts.PacingMode,
     hint_topic: str | None,
     retry: bool,
-    future: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Select the configured interviewer text stream."""
     if settings.interview_provider == "claude":
@@ -249,7 +241,6 @@ def _text_stream(
             mode,
             hint_topic,
             retry,
-            future,
         )
     return _gemini_text_stream(
         current,
@@ -258,7 +249,6 @@ def _text_stream(
         mode,
         hint_topic,
         retry,
-        future,
     )
 
 
@@ -269,13 +259,12 @@ async def _gemini_text_stream(
     mode: prompts.PacingMode,
     hint_topic: str | None,
     retry: bool,
-    future: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Yield Gemini interviewer text and usage updates."""
-    contents = _build_contents(current, user_text, mode, hint_topic, retry, future)
+    contents = _build_contents(current, user_text, mode, hint_topic, retry)
     tool = knowledge.file_search_tool()
     config = types.GenerateContentConfig(
-        system_instruction=prompts.build_fixed_prefix(current["age_2040"]),
+        system_instruction=prompts.build_fixed_prefix(current["age_2045"]),
         tools=[tool] if tool is not None else None,
     )
     stream = await gemini.get_client().aio.models.generate_content_stream(
@@ -297,7 +286,6 @@ async def _claude_text_stream(
     mode: prompts.PacingMode,
     hint_topic: str | None,
     retry: bool,
-    future: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Yield Claude interviewer text and final usage."""
     if settings.file_search_store_name:
@@ -309,7 +297,7 @@ async def _claude_text_stream(
         system=[
             {
                 "type": "text",
-                "text": prompts.build_fixed_prefix(current["age_2040"]),
+                "text": prompts.build_fixed_prefix(current["age_2045"]),
                 "cache_control": {"type": "ephemeral"},
             }
         ],
@@ -319,7 +307,6 @@ async def _claude_text_stream(
             mode,
             hint_topic,
             retry,
-            future,
         ),
     ) as stream:
         async for text in stream.text_stream:
@@ -342,7 +329,6 @@ def _build_claude_messages(
     mode: prompts.PacingMode,
     hint_topic: str | None = None,
     retry: bool = False,
-    future: bool = False,
 ) -> list[dict[str, str]]:
     """Build text-only Claude messages with the current instruction last."""
     messages = [
@@ -360,7 +346,6 @@ def _build_claude_messages(
             mode,
             hint_topic,
             retry,
-            future,
         )
     )
     messages.append({"role": "user", "content": text})
@@ -373,7 +358,6 @@ def _build_contents(
     mode: prompts.PacingMode,
     hint_topic: str | None = None,
     retry: bool = False,
-    future: bool = False,
 ) -> list[types.Content]:
     """Build full conversation contents with the current utterance and its instruction last."""
     contents = [
@@ -391,7 +375,6 @@ def _build_contents(
         mode,
         hint_topic,
         retry,
-        future,
     )
     contents.append(_content("user", assembled))
     return contents

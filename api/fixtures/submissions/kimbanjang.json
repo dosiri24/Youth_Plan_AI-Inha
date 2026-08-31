@@ -253,7 +253,7 @@
     "self_info": {
       "nickname": "김반장",
       "birth_year": 1991,
-      "age_2040": 49,
+      "age_2045": 54,
       "gender": "male",
       "raw_region": "남동구 논현동",
       "normalized_region": "남동구",
@@ -699,7 +699,7 @@
   "self_info": {
     "nickname": "김반장",
     "birth_year": 1991,
-    "age_2040": 49,
+    "age_2045": 54,
     "gender": "male",
     "raw_region": "남동구 논현동",
     "normalized_region": "남동구",

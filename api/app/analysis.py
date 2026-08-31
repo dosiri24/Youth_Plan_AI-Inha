@@ -790,7 +790,7 @@ def dashboard_aggregates(
 
 
 def _age(info: dict[str, Any], reference_year: int) -> int:
-    """Calculate age the same way sessions derive age_2040, or zero without a birth year."""
+    """Calculate age the same way sessions derive age_2045, or zero without a birth year."""
     birth_year = info.get("birth_year")
     if birth_year is None:
         return 0

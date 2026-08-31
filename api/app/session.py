@@ -34,7 +34,7 @@ class Session(TypedDict):
 
     session_id: str
     birth_year: int
-    age_2040: int
+    age_2045: int
     gender: Literal["male", "female", "other"]
     fixture: str
     messages: list[Message]
@@ -60,7 +60,7 @@ def create_session(
     current: Session = {
         "session_id": session_id,
         "birth_year": birth_year,
-        "age_2040": 2040 - birth_year,
+        "age_2045": 2045 - birth_year,
         "gender": gender,
         "fixture": "",
         "messages": [],

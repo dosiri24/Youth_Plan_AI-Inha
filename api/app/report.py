@@ -156,7 +156,7 @@ class SelfInfo(TypedDict):
 
     nickname: str
     birth_year: int
-    age_2040: int
+    age_2045: int
     gender: str
     raw_region: str
     normalized_region: str
@@ -339,7 +339,7 @@ def assemble(
         "self_info": {
             "nickname": extracted.nickname,
             "birth_year": current["birth_year"],
-            "age_2040": current["age_2040"],
+            "age_2045": current["age_2045"],
             "gender": current["gender"],
             "raw_region": extracted.raw_region,
             "normalized_region": normalized_region,

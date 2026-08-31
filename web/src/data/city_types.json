@@ -1,98 +1,98 @@
 [
   {
     "code": "AUOF",
-    "nickname": "밤낮없이 새 일이 벌어지는 번화가도시",
+    "nickname": "빛나는 기회의 도시",
     "description": "밤에도 불이 꺼지지 않는 번화한 거리에서 새로운 일과 기회가 계속 생겨나는 인천을 바랍니다.",
-    "image": "/city-types/AUOF.svg"
+    "image": "/city-types/AUOF.jpeg"
   },
   {
     "code": "AUOH",
     "nickname": "이야기가 피어나는 성장도시",
     "description": "오래된 거리의 이야기를 지키면서도 사람과 일거리가 계속 모여드는 인천을 바랍니다.",
-    "image": "/city-types/AUOH.svg"
+    "image": "/city-types/AUOH.jpeg"
   },
   {
     "code": "AUWF",
-    "nickname": "함께 빛나는 미래광장도시",
+    "nickname": "빛나는 미래 광장 도시",
     "description": "도심 광장에 사람이 모이고, 새로운 방식의 돌봄이 모두에게 닿는 인천을 바랍니다.",
-    "image": "/city-types/AUWF.svg"
+    "image": "/city-types/AUWF.jpeg"
   },
   {
     "code": "AUWH",
-    "nickname": "온기가 흐르는 문화거리도시",
-    "description": "늘 사람 소리가 나는 문화거리에서 오래 알고 지낸 이웃의 온기가 이어지는 인천을 바랍니다.",
-    "image": "/city-types/AUWH.svg"
+    "nickname": "다함께 즐기는 문화도시",
+    "description": "동네 축제와 시장에 다 함께 모여, 오래 알고 지낸 이웃의 온기가 이어지는 인천을 바랍니다.",
+    "image": "/city-types/AUWH.jpeg"
   },
   {
     "code": "ANOF",
     "nickname": "푸른 도전의 숲도시",
     "description": "숲과 물가를 가까이 두고도 새로운 도전과 기회가 활발하게 벌어지는 인천을 바랍니다.",
-    "image": "/city-types/ANOF.svg"
+    "image": "/city-types/ANOF.jpeg"
   },
   {
     "code": "ANOH",
-    "nickname": "옛 포구에 활기가 도는 장터도시",
-    "description": "오래된 포구와 장터의 모습을 그대로 두고도 사람이 모이고 벌이가 되는 인천을 바랍니다.",
-    "image": "/city-types/ANOH.svg"
+    "nickname": "활기가 도는 포구도시",
+    "description": "오래된 포구의 모습을 그대로 두고도 사람이 모이고 벌이가 되는 인천을 바랍니다.",
+    "image": "/city-types/ANOH.jpeg"
   },
   {
     "code": "ANWF",
     "nickname": "모두를 품는 그린도시",
     "description": "누구나 가까운 자연에 닿을 수 있고 새로운 돌봄이 모두를 품는 활기찬 인천을 바랍니다.",
-    "image": "/city-types/ANWF.svg"
+    "image": "/city-types/ANWF.jpeg"
   },
   {
     "code": "ANWH",
-    "nickname": "정겹게 북적이는 바닷마을도시",
-    "description": "바닷가 마을의 왁자한 분위기와 오래 쌓인 정이 그대로 이어지는 인천을 바랍니다.",
-    "image": "/city-types/ANWH.svg"
+    "nickname": "정겹게 북적이는 바다도시",
+    "description": "바닷가의 왁자한 분위기와 오래 쌓인 정이 그대로 이어지는 인천을 바랍니다.",
+    "image": "/city-types/ANWH.jpeg"
   },
   {
     "code": "CUOF",
     "nickname": "별빛 아래 기회도시",
     "description": "붐비지 않는 조용한 밤거리 곁에서도 새 기술과 좋은 일자리가 가까이 있는 인천을 바랍니다.",
-    "image": "/city-types/CUOF.svg"
+    "image": "/city-types/CUOF.jpeg"
   },
   {
     "code": "CUOH",
-    "nickname": "여유가 스며드는 골목도시",
-    "description": "번잡하지 않은 골목에서 이미 있는 건물과 상권이 알뜰하게 살아나는 인천을 바랍니다.",
-    "image": "/city-types/CUOH.svg"
+    "nickname": "나만의 문화살롱도시",
+    "description": "오래된 건물에 들어선 서점과 작은 가게가 조용한 골목을 알뜰하게 살려내는 인천을 바랍니다.",
+    "image": "/city-types/CUOH.jpeg"
   },
   {
     "code": "CUWF",
     "nickname": "따뜻한 내일도시",
     "description": "서두르지 않아도 되는 동네 안에서 돌봄과 복지가 새로운 방식으로 닿는 인천을 바랍니다.",
-    "image": "/city-types/CUWF.svg"
+    "image": "/city-types/CUWF.jpeg"
   },
   {
     "code": "CUWH",
     "nickname": "마음이 쉬어가는 생활도시",
     "description": "익숙한 거리와 단골 가게, 오래 본 이웃 곁에서 마음 편히 쉬어 가는 인천을 바랍니다.",
-    "image": "/city-types/CUWH.svg"
+    "image": "/city-types/CUWH.jpeg"
   },
   {
     "code": "CNOF",
-    "nickname": "느긋하게 내일을 일구는 텃밭도시",
-    "description": "나무와 물이 가까운 곳에서 느긋하게 살면서도 새로운 일을 일굴 수 있는 인천을 바랍니다.",
-    "image": "/city-types/CNOF.svg"
+    "nickname": "스마트 힐링 도시",
+    "description": "나무와 물이 가까운 곳에서 느긋하게 쉬면서도 새로운 기술로 일할 수 있는 인천을 바랍니다.",
+    "image": "/city-types/CNOF.jpeg"
   },
   {
     "code": "CNOH",
-    "nickname": "시간을 담은 숲속도시",
+    "nickname": "고요한 숲속도시",
     "description": "숲과 갯벌을 그대로 두고 지금 있는 것으로 조용히 먹고사는 인천을 바랍니다.",
-    "image": "/city-types/CNOH.svg"
+    "image": "/city-types/CNOH.jpeg"
   },
   {
     "code": "CNWF",
-    "nickname": "서로를 품는 정원도시",
-    "description": "정원처럼 가꾼 한적한 동네에서 돌봄이 새롭게 촘촘해지는 인천을 바랍니다.",
-    "image": "/city-types/CNWF.svg"
+    "nickname": "서로를 품는 생태도시",
+    "description": "자연을 함께 가꾸는 한적한 동네에서 돌봄이 새롭게 촘촘해지는 인천을 바랍니다.",
+    "image": "/city-types/CNWF.jpeg"
   },
   {
     "code": "CNWH",
-    "nickname": "포근한 바람의 마을",
-    "description": "오래된 나무와 조용한 물가 곁에서 익숙한 이웃과 함께 나이 드는 인천을 바랍니다.",
-    "image": "/city-types/CNWH.svg"
+    "nickname": "다정한 정원도시",
+    "description": "오래된 나무와 마을 정원 곁에서 익숙한 이웃과 함께 나이 드는 인천을 바랍니다.",
+    "image": "/city-types/CNWH.jpeg"
   }
 ]

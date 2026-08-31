@@ -56,5 +56,7 @@ docs/dashboard-review/
 
 # Tuning records stay local; the published repo carries system code only.
 Interview1_workspace
+Interview2_workspace
 PROJECT_STATUS.md
 web/undefined/board.png
+web/public/city-types/*.jpeg

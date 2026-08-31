@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, LoaderCircle, LockKeyhole } from "lucide-react";
 
 import { AxisReasons } from "@/components/axis-reasons";
@@ -101,7 +95,6 @@ function ResultNotice() {
 
 type SubmittedProps = {
   action: CardAction;
-  cardRef: RefObject<HTMLDivElement | null>;
   nickname: string;
   typeResult: TypeResult;
   onDownload: () => void;
@@ -111,7 +104,6 @@ type SubmittedProps = {
 /** Submitted results stay entirely in volatile client state for sharing. */
 function Submitted({
   action,
-  cardRef,
   nickname,
   onDownload,
   onShare,
@@ -132,11 +124,7 @@ function Submitted({
       </header>
 
       <div className="space-y-5 px-5 pt-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
-        <CityTypeCard
-          ref={cardRef}
-          nickname={nickname}
-          typeResult={typeResult}
-        />
+        <CityTypeCard nickname={nickname} typeResult={typeResult} />
         <ShareActions
           action={action}
           onDownload={onDownload}
@@ -164,7 +152,6 @@ export function ResultScreen({
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [cardAction, setCardAction] = useState<CardAction>(null);
   const startedRef = useRef(false);
-  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -213,12 +200,11 @@ export function ResultScreen({
   };
 
   const share = async () => {
-    const card = cardRef.current;
-    if (!card || !result || cardAction !== null) return;
+    if (!result || cardAction !== null) return;
 
     setCardAction("share");
     try {
-      await shareTypeCard(card, getCityType(result.type_result.code).nickname);
+      await shareTypeCard(getCityType(result.type_result.code));
     } catch {
       // Share/save failure must not discard the result; only this attempt ends (PLAN 9.3, D1).
     } finally {
@@ -227,15 +213,11 @@ export function ResultScreen({
   };
 
   const download = async () => {
-    const card = cardRef.current;
-    if (!card || !result || cardAction !== null) return;
+    if (!result || cardAction !== null) return;
 
     setCardAction("download");
     try {
-      await downloadTypeCard(
-        card,
-        getCityType(result.type_result.code).nickname,
-      );
+      await downloadTypeCard(getCityType(result.type_result.code));
     } catch {
       // Share/save failure must not discard the result; only this attempt ends (PLAN 9.3, D1).
     } finally {
@@ -254,7 +236,6 @@ export function ResultScreen({
     return (
       <Submitted
         action={cardAction}
-        cardRef={cardRef}
         nickname={report.self_info.nickname}
         onDownload={() => void download()}
         onShare={() => void share()}
@@ -284,7 +265,6 @@ export function ResultScreen({
         <div className="space-y-10 px-5 pt-6 pb-8">
           <div className="space-y-4">
             <CityTypeCard
-              ref={cardRef}
               nickname={report.self_info.nickname}
               typeResult={typeResult}
             />

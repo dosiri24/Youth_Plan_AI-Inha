@@ -11,7 +11,7 @@ const pretendard = localFont({
 
 export const metadata: Metadata = {
   title: "유스플랜AI",
-  description: "청년의 목소리로 2040년 인천을 그리는 AI 인터뷰 서비스",
+  description: "청년의 목소리로 2045년 인천을 그리는 AI 인터뷰 서비스",
 };
 
 export const viewport: Viewport = {

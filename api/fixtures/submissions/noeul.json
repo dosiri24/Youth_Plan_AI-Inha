@@ -229,7 +229,7 @@
     "self_info": {
       "nickname": "노을",
       "birth_year": 2004,
-      "age_2040": 36,
+      "age_2045": 41,
       "gender": "female",
       "raw_region": "강화읍 남산리",
       "normalized_region": "강화군",
@@ -698,7 +698,7 @@
   "self_info": {
     "nickname": "노을",
     "birth_year": 2004,
-    "age_2040": 36,
+    "age_2045": 41,
     "gender": "female",
     "raw_region": "강화읍 남산리",
     "normalized_region": "강화군",

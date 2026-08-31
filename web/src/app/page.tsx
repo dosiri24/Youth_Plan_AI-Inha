@@ -73,17 +73,18 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
       <div className="flex-1">
         <p className="text-[15px] font-bold text-primary">유스플랜AI</p>
         <h1 className="mt-3 text-[29px] leading-[1.28] font-bold tracking-[-0.035em]">
-          2040년의 인천,
+          2045년의 인천,
           <br />
           어떤 하루를 보내고 싶나요?
         </h1>
         <p className="mt-4 text-[16px] leading-7 text-muted-foreground">
-          AI와 대화하며 내가 바라는 2040년 인천의 일상과 필요한 변화를 함께
-          정리해요. 들려주신 이야기는 2040년 인천을 계획할 때 청년의 관점을
+          AI와 대화하며 내가 바라는 2045년 인천의 일상과 필요한 변화를 함께
+          정리해요. 들려주신 이야기는 2045년 인천을 계획할 때 청년의 관점을
           반영하는 자료가 돼요.
         </p>
         <p className="mt-3 text-[15px] leading-7 text-muted-foreground">
-          인천에 살고 있는 청년을 대상으로 하는 인터뷰예요.
+          인천에 살거나, 학교나 직장이 인천이거나, 인천을 자주 찾는 청년이면
+          누구나 참여할 수 있어요.
         </p>
         {/* The only place the duration is stated, so the interviewer never guesses it. */}
         <p className="mt-3 text-[15px] font-semibold text-incheon-green">

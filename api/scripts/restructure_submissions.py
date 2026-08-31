@@ -58,7 +58,7 @@ async def rebuild(submission_id: str, submission_store: store.SubmissionStore) -
     current: session.Session = {
         "session_id": document["session_id"],
         "birth_year": birth_year,
-        "age_2040": 2040 - birth_year,
+        "age_2045": 2045 - birth_year,
         "gender": self_info["gender"],
         "messages": revive(document["raw_transcript"]),
         "evidence_log": document["evidence_log"],

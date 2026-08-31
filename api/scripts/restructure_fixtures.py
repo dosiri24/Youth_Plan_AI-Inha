@@ -52,7 +52,7 @@ async def rebuild(name: str) -> None:
     current: session.Session = {
         "session_id": submission["session_id"],
         "birth_year": fixture["birth_year"],
-        "age_2040": 2040 - fixture["birth_year"],
+        "age_2045": 2045 - fixture["birth_year"],
         # A fixture has no start screen, so its file supplies the form-owned value.
         "gender": fixture["gender"],
         "messages": messages,
