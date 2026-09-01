@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Check, LoaderCircle, LockKeyhole } from "lucide-react";
 
 import { AxisReasons } from "@/components/axis-reasons";
@@ -9,7 +15,7 @@ import { ReportOverview } from "@/components/report-overview";
 import { ResultLoading } from "@/components/result-loading";
 import { RevisionForm, REVISION_FORM_ID } from "@/components/revision-form";
 import { ShareActions, type CardAction } from "@/components/share-actions";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   generateResult,
   reviseResult,
@@ -20,8 +26,10 @@ import {
   type TypeResult,
 } from "@/lib/api";
 import { getCityType } from "@/lib/city-types";
+import { PRIZE_DRAW_OPEN, PRIZE_FORM_URL } from "@/lib/prize";
 import { downloadTypeCard, shareTypeCard } from "@/lib/share-card";
 import { useBackGuard } from "@/lib/use-back-guard";
+import { cn } from "@/lib/utils";
 
 type ResultScreenProps = {
   sessionId: string;
@@ -77,6 +85,38 @@ function ResultStepLayout({
   );
 }
 
+type ResultFailedProps = {
+  onRetry: () => void;
+  onReturn: () => void;
+};
+
+/** A failed generation leaves the session intact, so asking again is the way out. */
+function ResultFailed({ onRetry, onReturn }: ResultFailedProps) {
+  return (
+    <section className="flex flex-1 flex-col items-center justify-center bg-card px-6 text-center">
+      <h1 className="text-[26px] leading-9 font-bold tracking-[-0.03em]">
+        결과를 만들지 못했어요
+      </h1>
+      <p className="mt-4 text-[15px] leading-6 text-muted-foreground">
+        나눈 이야기는 그대로 있어요. 한 번 더 해 볼까요?
+      </p>
+      <Button
+        className="mt-9 h-14 w-full rounded-2xl text-base font-bold"
+        onClick={onRetry}
+      >
+        다시 시도
+      </Button>
+      <Button
+        className="mt-2.5 h-14 w-full rounded-2xl text-[15px] font-bold"
+        onClick={onReturn}
+        variant="secondary"
+      >
+        처음 화면으로
+      </Button>
+    </section>
+  );
+}
+
 /** Volatile results need one concise warning after the participant submits. */
 function ResultNotice() {
   return (
@@ -90,6 +130,124 @@ function ResultNotice() {
         볼 수 없어요.
       </p>
     </div>
+  );
+}
+
+const SCALE_SCORES = [1, 2, 3, 4, 5];
+
+type ScaleQuestionProps = {
+  highLabel: string;
+  lowLabel: string;
+  name: string;
+  onChange: (score: number) => void;
+  question: string;
+  value: number | null;
+};
+
+/** Native radios keep the scale reachable by keyboard and screen reader (PLAN 2.4). */
+function ScaleQuestion({
+  highLabel,
+  lowLabel,
+  name,
+  onChange,
+  question,
+  value,
+}: ScaleQuestionProps) {
+  return (
+    <fieldset>
+      <legend className="text-[15px] leading-6 font-bold">{question}</legend>
+      {/* The row owns the painted height so the labels below can reach past it
+          without the cells growing back to meet them. */}
+      <div className="mt-3.5 flex h-9 gap-2">
+        {SCALE_SCORES.map((score) => (
+          // Positioned so the sr-only radio is clipped by the scroll area; without an
+          // anchor it lands on the document and drags the whole page down on tap. The
+          // negative margin buys a finger-sized target from a cell this short.
+          <label
+            className="relative -my-1.5 flex flex-1 cursor-pointer py-1.5"
+            key={score}
+          >
+            <input
+              checked={value === score}
+              className="peer sr-only"
+              name={name}
+              onChange={() => onChange(score)}
+              type="radio"
+              value={score}
+            />
+            <span className="flex flex-1 items-center justify-center rounded-[12px] bg-muted text-[15px] font-semibold text-muted-foreground transition-colors peer-checked:bg-primary peer-checked:font-bold peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40">
+              {score}
+            </span>
+          </label>
+        ))}
+      </div>
+      <div className="mt-2.5 flex justify-between text-[12px] text-muted-foreground">
+        <span>{lowLabel}</span>
+        <span>{highLabel}</span>
+      </div>
+    </fieldset>
+  );
+}
+
+type SatisfactionProps = {
+  accuracy: number | null;
+  ease: number | null;
+  onAccuracyChange: (score: number) => void;
+  onEaseChange: (score: number) => void;
+};
+
+/** Answering stays optional: submission must never wait on these two questions. */
+function Satisfaction({
+  accuracy,
+  ease,
+  onAccuracyChange,
+  onEaseChange,
+}: SatisfactionProps) {
+  return (
+    <section className="space-y-7 rounded-[24px] bg-card p-5">
+      <ScaleQuestion
+        highLabel="편했어요"
+        lowLabel="불편했어요"
+        name="satisfaction-ease"
+        onChange={onEaseChange}
+        question="이렇게 대화로 의견을 내는 방식이 편했나요?"
+        value={ease}
+      />
+      <ScaleQuestion
+        highLabel="잘 담겼어요"
+        lowLabel="아니에요"
+        name="satisfaction-accuracy"
+        onChange={onAccuracyChange}
+        question="정리된 결과가 내 생각을 잘 담고 있나요?"
+        value={accuracy}
+      />
+    </section>
+  );
+}
+
+/** The draw runs on a separate form so contact details never enter the submission. */
+function PrizeEntry() {
+  return (
+    <section className="rounded-[20px] bg-card px-4 py-4">
+      <h2 className="text-[15px] font-bold">
+        스타벅스 쿠폰 추첨에 응모할 수 있어요
+      </h2>
+      <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
+        제출을 마치고 응모한 분들 중 10명을 무작위로 뽑아 스타벅스 쿠폰을
+        드려요. 수집이 끝나는 9월 말에 응모할 때 남긴 연락처로 따로 알려 드려요.
+      </p>
+      <a
+        className={cn(
+          buttonVariants({ variant: "secondary" }),
+          "mt-4 h-13 w-full rounded-2xl text-[15px] font-bold",
+        )}
+        href={PRIZE_FORM_URL}
+        rel="noreferrer"
+        target="_blank"
+      >
+        추첨 응모하러 가기
+      </a>
+    </section>
   );
 }
 
@@ -130,6 +288,7 @@ function Submitted({
           onDownload={onDownload}
           onShare={onShare}
         />
+        {PRIZE_DRAW_OPEN && <PrizeEntry />}
         <ResultNotice />
       </div>
     </div>
@@ -149,21 +308,34 @@ export function ResultScreen({
   const [revising, setRevising] = useState(false);
   const [reviseReady, setReviseReady] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [ease, setEase] = useState<number | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [cardAction, setCardAction] = useState<CardAction>(null);
-  const startedRef = useRef(false);
+  const [generationFailed, setGenerationFailed] = useState(false);
+  const generatingRef = useRef(false);
 
-  useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
+  // The ref guards the mount from firing twice and the failure screen from firing
+  // a second request, which is the same guarantee, so one flag carries both.
+  const generate = useCallback(() => {
+    if (generatingRef.current) return;
+    generatingRef.current = true;
+    setGenerationFailed(false);
 
     void generateResult(sessionId)
       .then((fetched) => {
         setResult(fetched);
         setReport(fetched.report);
       })
-      .catch(() => onError());
-  }, [onError, sessionId]);
+      .catch(() => setGenerationFailed(true))
+      .finally(() => {
+        generatingRef.current = false;
+      });
+  }, [sessionId]);
+
+  useEffect(() => {
+    generate();
+  }, [generate]);
 
   // The first step has no earlier step, and a submitted session no longer exists.
   useBackGuard(() => {
@@ -191,7 +363,7 @@ export function ResultScreen({
 
     setSubmitting(true);
     try {
-      setSubmissionId(await submitResult(sessionId));
+      setSubmissionId(await submitResult(sessionId, ease, accuracy));
     } catch {
       onError();
     } finally {
@@ -224,6 +396,9 @@ export function ResultScreen({
       setCardAction(null);
     }
   };
+
+  if (generationFailed)
+    return <ResultFailed onRetry={generate} onReturn={onReturn} />;
 
   if (!result || !report || !revealed)
     return (
@@ -314,6 +489,9 @@ export function ResultScreen({
         <div className="space-y-12 px-5 pt-6 pb-8">
           <ReportOverview report={report} />
 
+          {/* The questions come after the revision offer so the second one is
+              answered about the wording actually being submitted, and stay above
+              the closing note so that note still sits next to the button. */}
           <div className="space-y-4">
             <section className="rounded-[24px] bg-card p-5 text-center">
               <h2 className="text-[18px] font-bold">
@@ -327,6 +505,12 @@ export function ResultScreen({
                 요구 수정하기
               </Button>
             </section>
+            <Satisfaction
+              accuracy={accuracy}
+              ease={ease}
+              onAccuracyChange={setAccuracy}
+              onEaseChange={setEase}
+            />
             <p className="text-center text-[13px] leading-5 text-muted-foreground">
               제출하면 이 보고서는 확정되고 더 이상 수정할 수 없어요.
             </p>

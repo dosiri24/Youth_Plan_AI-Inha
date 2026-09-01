@@ -144,6 +144,13 @@ async def _run(
             turn=turn,
             reason=type(error).__name__,
         )
+        if current["messages"]:
+            current["status"] = "ended"
+            yield _sse(
+                "end",
+                {"state": "ended", "progress": _progress(turn, "ended", settings)},
+            )
+            return
         raise
     finally:
         if scoring_task is not None and not scoring_task.done():

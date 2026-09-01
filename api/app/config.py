@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     interview_hint_turn: int = 5
     interview_wrapup_turn: int = 10
     interview_max_extra_turns: int = 4
+    max_live_sessions: int = 40
     dev_mode: bool = False
     access_code: str = ""
     web_origin: str = "http://localhost:3000"

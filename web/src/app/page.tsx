@@ -8,6 +8,8 @@ import { ResultScreen } from "@/components/result-screen";
 import { Button } from "@/components/ui/button";
 import { VisitPing } from "@/components/visit-ping";
 import { createSession, type Gender } from "@/lib/api";
+import { readDeviceToken } from "@/lib/device-token";
+import { PRIZE_DRAW_OPEN } from "@/lib/prize";
 
 type Screen =
   | { name: "start" }
@@ -15,11 +17,11 @@ type Screen =
   | { name: "result"; sessionId: string }
   | { name: "error" };
 
-/** Invalid years should fail before the backend creates a session. */
+/** Bound entry to ages 16 to 29 as counted in 2026, keeping every participant clear of the guardian-consent threshold at 14. */
 function isValidBirthYear(value: string): boolean {
   if (!/^\d{4}$/.test(value)) return false;
   const year = Number(value);
-  return year >= 1900 && year <= 2026;
+  return year >= 1997 && year <= 2010;
 }
 
 const GENDER_OPTIONS: { value: Gender; label: string }[] = [
@@ -33,12 +35,11 @@ type StartScreenProps = {
   onStart: (sessionId: string) => void;
 };
 
-/** The entry explains why participation matters before requesting verification. */
+/** The entry explains why participation matters before the participant consents. */
 function StartScreen({ onError, onStart }: StartScreenProps) {
   const [birthYear, setBirthYear] = useState("");
   const [gender, setGender] = useState<Gender | null>(null);
   const [genderSlides, setGenderSlides] = useState(false);
-  const [agreed, setAgreed] = useState(false);
   const [pending, setPending] = useState(false);
   const valid = isValidBirthYear(birthYear);
   const invalid = birthYear.length > 0 && !valid;
@@ -55,11 +56,14 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!valid || gender === null || !agreed || pending) return;
+    if (!valid || gender === null || pending) return;
 
     setPending(true);
     try {
-      onStart(await createSession(Number(birthYear), gender));
+      // Read on submit because localStorage does not exist during server rendering.
+      onStart(
+        await createSession(Number(birthYear), gender, readDeviceToken()),
+      );
     } catch {
       onError();
     } finally {
@@ -77,12 +81,13 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
           <br />
           어떤 하루를 보내고 싶나요?
         </h1>
-        <p className="mt-4 text-[16px] leading-7 text-muted-foreground">
-          AI와 대화하며 내가 바라는 2045년 인천의 일상과 필요한 변화를 함께
-          정리해요. 들려주신 이야기는 2045년 인천을 계획할 때 청년의 관점을
-          반영하는 자료가 돼요.
+        {/* Tighter leading than the rest of the screen: the notice below has to name
+            every collected item, and this is where that height comes from. */}
+        <p className="mt-3 text-[16px] leading-6 text-muted-foreground">
+          AI와 대화하며 내가 바라는 2045년 인천의 일상과 필요한 변화를 정리해요.
+          들려주신 이야기는 인천을 계획할 때 청년의 관점을 반영하는 자료가 돼요.
         </p>
-        <p className="mt-3 text-[15px] leading-7 text-muted-foreground">
+        <p className="mt-3 text-[15px] leading-6 text-muted-foreground">
           인천에 살거나, 학교나 직장이 인천이거나, 인천을 자주 찾는 청년이면
           누구나 참여할 수 있어요.
         </p>
@@ -90,9 +95,16 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
         <p className="mt-3 text-[15px] font-semibold text-incheon-green">
           인터뷰는 5~10분 정도 걸려요.
         </p>
+        {/* A completion reward only works if it is known before starting, so it
+            joins the duration as the second fact about taking part. */}
+        {PRIZE_DRAW_OPEN && (
+          <p className="mt-1.5 text-[15px] font-semibold text-incheon-green">
+            끝까지 마치면 스타벅스 쿠폰 추첨에 응모할 수 있어요.
+          </p>
+        )}
       </div>
 
-      <form className="mt-10 shrink-0" onSubmit={submit}>
+      <form className="mt-6 shrink-0" onSubmit={submit}>
         {/* The error shares the label's line so appearing and clearing costs no vertical space. */}
         <div className="flex items-baseline justify-between gap-3">
           <label
@@ -105,7 +117,7 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
             id="birth-year-error"
             className={`shrink-0 text-[12px] whitespace-nowrap text-muted-foreground ${invalid ? "visible" : "invisible"}`}
           >
-            1900~2026 사이로 입력해 주세요
+            1997~2010년생이 참여할 수 있어요
           </p>
         </div>
         <input
@@ -179,40 +191,37 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
             </div>
           </div>
         </fieldset>
-        <div className="mt-5 rounded-2xl bg-muted/60 p-4">
-          <p className="text-[13px] leading-6 text-muted-foreground">
-            유스플랜AI는 인터뷰 진행과 정책 분석을 위해 출생연도와 성별, 인터뷰
-            대화 내용, 대화 중 언급한 별명·거주 지역·꿈 또는 직업을 수집해요.
-            수집한 내용은 인천시 청년정책 연구 자료로만 쓰고, 시범운영이 끝나면
-            파기해요.
-          </p>
-          <div className="mt-3 flex items-start gap-2.5">
-            <input
-              id="consent"
-              checked={agreed}
-              className="mt-0.5 size-5 shrink-0 accent-primary"
-              disabled={pending}
-              onChange={(event) => setAgreed(event.target.checked)}
-              type="checkbox"
-            />
-            <label
-              className="text-[14px] leading-6 font-semibold text-foreground"
-              htmlFor="consent"
-            >
-              안내를 읽었고 개인정보 수집·이용에 동의합니다.
-            </label>
+        <div className="mt-4 rounded-2xl bg-muted/60 p-3.5">
+          {/* Every collected item has to be named here, so the block splits into
+              what is taken and what happens to it rather than running on. */}
+          <div className="space-y-2 text-[12px] leading-5 text-muted-foreground">
+            <p>
+              유스플랜AI는 출생연도, 성별, 인터뷰 대화 내용, 대화 중 말한
+              별명·거주 지역·꿈 또는 직업, 만족도 답변 2개, 기기 식별 토큰을
+              받아요. 이 토큰은 같은 기기에서 몇 번 참여했는지만 세고, 참여를
+              막거나 누구인지 알아내지 않아요. 화면을 열면 뒷자리를 가린 IP
+              주소와 기기·브라우저도 남아요.
+            </p>
+            <p>
+              대화 내용은 앤트로픽과 구글의 AI로 처리해요. 받은 내용은 2045년
+              인천도시기본계획에 담을 청년 의견을 모으고 분석하는 데만 쓰고,
+              정리한 결과는 인천광역시에 전달해요. 2026년 12월 31일까지 보관하고
+              지워요.
+            </p>
           </div>
+          {/* The press is the consent now, so it carries the checkbox label's weight
+              and closes the notice instead of trailing the button as a footnote. */}
+          <p className="mt-3 text-[14px] leading-6 font-semibold text-foreground">
+            버튼을 누르면 개인정보 수집·이용에 동의하게 돼요.
+          </p>
         </div>
         <Button
-          className={`mt-4 h-14 w-full rounded-2xl text-base font-bold ${agreed ? "bg-verify text-white hover:bg-verify/90" : "bg-muted text-muted-foreground"}`}
-          disabled={!agreed || !valid || gender === null || pending}
+          className="mt-4 h-14 w-full rounded-2xl text-base font-bold"
+          disabled={!valid || gender === null || pending}
           type="submit"
         >
-          {pending ? "본인인증을 확인하고 있어요" : "본인인증하고 시작하기"}
+          {pending ? "시작하고 있어요" : "동의하고 시작하기"}
         </Button>
-        <p className="mt-2.5 text-center text-[12px] leading-5 text-muted-foreground">
-          시연용 서비스라 실제 본인인증 절차 없이 진행돼요.
-        </p>
       </form>
     </section>
   );

@@ -38,8 +38,9 @@ class VisitRequest(BaseModel):
 class CreateSessionRequest(BaseModel):
     """Represent the mock-auth session creation request."""
 
-    birth_year: Annotated[int, Field(strict=True, ge=1900, le=2026)]
+    birth_year: Annotated[int, Field(strict=True, ge=1997, le=2010)]
     gender: Literal["male", "female", "other"]
+    device_token: Annotated[str, Field(strict=True, min_length=1, max_length=64)]
 
 
 class CreateSessionResponse(BaseModel):
@@ -51,7 +52,7 @@ class CreateSessionResponse(BaseModel):
 class MessageRequest(BaseModel):
     """Represent one participant interview utterance."""
 
-    text: str
+    text: Annotated[str, Field(max_length=5000)]
 
 
 class SentencePosition(BaseModel):
@@ -69,14 +70,21 @@ class ReviseRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    selected_sentences: Annotated[list[SentencePosition], Field(min_length=1)]
-    comment: Annotated[str, Field(min_length=1)]
+    selected_sentences: Annotated[list[SentencePosition], Field(min_length=1, max_length=20)]
+    comment: Annotated[str, Field(min_length=1, max_length=2000)]
 
 
 class SubmissionResponse(BaseModel):
     """Keep submitted report data out of the one-shot response."""
 
     submission_id: str
+
+
+class SubmitRequest(BaseModel):
+    """Carry optional satisfaction ratings into the submitted document."""
+
+    ease: Annotated[int, Field(strict=True, ge=1, le=5)] | None = None
+    accuracy: Annotated[int, Field(strict=True, ge=1, le=5)] | None = None
 
 
 class DeleteSubmissionRequest(BaseModel):
@@ -149,7 +157,19 @@ def create_interview(
     request: Request,
 ) -> CreateSessionResponse:
     """Create one active in-memory interview session."""
-    current = session.create_session(session_request.birth_year, session_request.gender)
+    session.discard_stale_sessions()
+    live = len(session.sessions)
+    ceiling = get_settings().max_live_sessions
+    if live >= ceiling:
+        # A silent ceiling cannot be tuned, and a participant turned away looks
+        # identical to one who never arrived.
+        log_event("session_ceiling_reached", live=live, ceiling=ceiling)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE)
+    current = session.create_session(
+        session_request.birth_year,
+        session_request.gender,
+        session_request.device_token,
+    )
     log_event("session_created", session_id=current["session_id"])
     _record_activity("interview_start", request)
     return CreateSessionResponse(session_id=current["session_id"])
@@ -208,9 +228,31 @@ async def generate_result(session_id: str, request: Request) -> dict[str, object
         type_result = fixture["type_result"]
         personal_report = fixture["report"]
     else:
-        type_result = scoring.score_type(current["evidence_log"], session_id)
-        draft = await report.generate_draft(current, type_result)
-        personal_report = report.assemble(current, type_result, draft)
+        diagnostics = report.DraftDiagnostics()
+        try:
+            type_result = scoring.score_type(current["evidence_log"], session_id)
+            draft = await report.generate_draft(
+                current,
+                type_result,
+                diagnostics,
+            )
+            personal_report = report.assemble(current, type_result, draft)
+        except Exception as error:
+            fields: dict[str, object] = {
+                "session_id": session_id,
+                "reason": type(error).__name__,
+                "message_count": len(current["messages"]),
+                "turn_count": max(
+                    (message["turn"] for message in current["messages"]),
+                    default=0,
+                ),
+                "payload_length": diagnostics.payload_length,
+            }
+            upstream_status_code = getattr(error, "code", None)
+            if upstream_status_code is not None:
+                fields["upstream_status_code"] = upstream_status_code
+            log_event("result_failed", **fields)
+            raise
     current["type_result"] = type_result
     current["report"] = personal_report
     current["status"] = "result_ready"
@@ -255,6 +297,7 @@ async def revise_result(
 @app.post("/api/sessions/{session_id}/submit", response_model=SubmissionResponse)
 def submit_result(
     session_id: str,
+    submit_request: SubmitRequest,
     background_tasks: BackgroundTasks,
     request: Request,
 ) -> SubmissionResponse:
@@ -269,7 +312,11 @@ def submit_result(
 
     submission_id = str(uuid4())
     # Persist the full document before discarding so a save failure leaves the session retryable.
-    document = _submission_document(current)
+    document = _submission_document(
+        current,
+        submit_request.ease,
+        submit_request.accuracy,
+    )
     if current["fixture"]:
         fixture = dev.load_submission_fixture(current["fixture"])
         document["extra_demands"] = fixture["extra_demands"]
@@ -367,10 +414,15 @@ def latest_analysis() -> store.Document:
     return document
 
 
-def _submission_document(current: session.Session) -> store.Document:
+def _submission_document(
+    current: session.Session,
+    ease: int | None,
+    accuracy: int | None,
+) -> store.Document:
     """Build the 7.5 submissions document from a submitted session."""
     return {
         "session_id": current["session_id"],
+        "device_token": current["device_token"],
         "submitted_at": datetime.now(UTC),
         "self_info": current["report"]["self_info"],
         "raw_transcript": current["messages"],
@@ -380,6 +432,7 @@ def _submission_document(current: session.Session) -> store.Document:
         "extra_demands": None,
         "sectors": None,
         "deidentified": None,
+        "satisfaction": {"ease": ease, "accuracy": accuracy},
     }
 
 
@@ -455,6 +508,7 @@ def _submission_summary(document: store.Document) -> dict[str, object]:
     personal_report = document["report"]
     return {
         "submission_id": document["submission_id"],
+        "device_token": document.get("device_token", ""),
         "submitted_at": document["submitted_at"],
         "nickname": personal_report["self_info"]["nickname"],
         # The list shows the district it aggregates by, falling back to what was actually said.

@@ -20,6 +20,20 @@ type LoadState =
   | { status: "error" }
   | { status: "ready"; submissions: SubmissionSummary[] };
 
+/** Count submissions sharing a browser token, since repeat participation is measured rather than blocked. */
+function suspectedDuplicates(submissions: SubmissionSummary[]): number {
+  const perToken = new Map<string, number>();
+
+  for (const item of submissions) {
+    if (item.device_token === "") continue;
+    perToken.set(item.device_token, (perToken.get(item.device_token) ?? 0) + 1);
+  }
+
+  return [...perToken.values()]
+    .filter((count) => count > 1)
+    .reduce((total, count) => total + count, 0);
+}
+
 /** The list drills from the aggregate report into each participant's context. */
 export default function SubmissionsList() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
@@ -102,6 +116,11 @@ export default function SubmissionsList() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-[26px] font-bold tracking-[-0.02em]">제출본</h1>
+          {state.status === "ready" && (
+            <p className="mt-1.5 text-[13px] text-muted-foreground">
+              중복 의심 {suspectedDuplicates(state.submissions)}건
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {deleteMode && (

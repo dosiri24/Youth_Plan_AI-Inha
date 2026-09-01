@@ -274,13 +274,18 @@ export function recordVisit(page: VisitPage): void {
 export async function createSession(
   birthYear: number,
   gender: Gender,
+  deviceToken: string,
 ): Promise<string> {
   const response = await request("/api/sessions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ birth_year: birthYear, gender }),
+    body: JSON.stringify({
+      birth_year: birthYear,
+      gender,
+      device_token: deviceToken,
+    }),
   });
   const data = (await response.json()) as SessionResponse;
 
@@ -373,9 +378,17 @@ export async function reviseResult(
 }
 
 /** Submission returns no result data so the held client state stays authoritative. */
-export async function submitResult(sessionId: string): Promise<string> {
+export async function submitResult(
+  sessionId: string,
+  ease: number | null,
+  accuracy: number | null,
+): Promise<string> {
   const response = await request(`/api/sessions/${sessionId}/submit`, {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ease, accuracy }),
   });
   const data = (await response.json()) as { submission_id: string };
 
@@ -451,6 +464,8 @@ export type SubmissionSummary = {
   type_code: string;
   turn_count: number;
   revision_count: number;
+  /** Empty on submissions stored before the browser token was collected. */
+  device_token: string;
 };
 
 export type SubmissionDetail = {
@@ -606,6 +621,14 @@ export type DashboardPerson = {
   settlement: Partial<Record<SettlementField, string>>;
   code: string;
   turns: number;
+  /* An analysis run stored before this round carries none of the next three keys, and
+     re-running analysis to add them costs paid calls, so the reader tolerates their absence. */
+  /** Two 1~5 ratings given just before submitting; null where the question was skipped. */
+  satisfaction?: { ease: number | null; accuracy: number | null };
+  /** An opaque per-browser identifier, empty on submissions stored before it existed. */
+  device_token?: string;
+  /** Derived from transcript timestamps, and 0 when the transcript was too short to measure. */
+  duration_seconds?: number;
   submitted_at: string;
   summary: string;
   /** Axis demands and extra demands in one list, and empty without a blinded copy. */

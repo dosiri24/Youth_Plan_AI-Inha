@@ -2,6 +2,7 @@ import asyncio
 import json
 import re
 from collections import Counter
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, Self
 from uuid import uuid4
@@ -26,6 +27,7 @@ AGE_BANDS = (("19~24", 19, 24), ("25~29", 25, 29), ("30~34", 30, 34), ("35~39", 
 QUOTE_CANDIDATES_PER_AXIS = 12
 EMPTY_TOP_DEMAND: dict[str, Any] = {"title": "", "reason": [], "quotes": [], "demand_id": ""}
 QUOTE_CANDIDATES_TOTAL = 100
+SUPPLEMENT_CONCURRENCY_LIMIT = 8
 
 
 class NoSubmissionsError(Exception):
@@ -816,6 +818,12 @@ def _person(
     # missing key would fail the whole analysis run rather than one participant entry.
     report = document["report"]
     info = document["self_info"]
+    transcript = document["raw_transcript"]
+    duration_seconds = (
+        int((transcript[-1]["timestamp"] - transcript[0]["timestamp"]).total_seconds())
+        if len(transcript) >= 2
+        else 0
+    )
     demands = []
     if document["deidentified"] is not None:
         labels = document.get("sectors") or {}
@@ -849,6 +857,12 @@ def _person(
         "settlement": dict(report.get("settlement", {})),
         "code": document["type_result"]["code"],
         "turns": report["meta"]["turn_count"],
+        "satisfaction": document.get(
+            "satisfaction",
+            {"ease": None, "accuracy": None},
+        ),
+        "device_token": document.get("device_token", ""),
+        "duration_seconds": duration_seconds,
         "submitted_at": document["submitted_at"],
         "summary": " ".join(report["summary"]),
         "demands": demands,
@@ -1199,10 +1213,12 @@ async def execute() -> str:
 async def supplement_missing(documents: list[store.Document]) -> list[TokenUsage]:
     """Backfill missing post-processing fields in their required dependency order."""
     usages: list[TokenUsage] = []
+    # Built per run because a semaphore binds to whichever event loop first makes it wait.
+    limit = asyncio.Semaphore(SUPPLEMENT_CONCURRENCY_LIMIT)
     usages.extend(
         await asyncio.gather(
             *(
-                extract_extra_demands(document)
+                _limited_supplement(limit, extract_extra_demands, document)
                 for document in documents
                 if document.get("extra_demands") is None
             )
@@ -1210,15 +1226,33 @@ async def supplement_missing(documents: list[store.Document]) -> list[TokenUsage
     )
     usages.extend(
         await asyncio.gather(
-            *(label_sectors(document) for document in documents if document.get("sectors") is None)
+            *(
+                _limited_supplement(limit, label_sectors, document)
+                for document in documents
+                if document.get("sectors") is None
+            )
         )
     )
     usages.extend(
         await asyncio.gather(
-            *(deidentify(document) for document in documents if document["deidentified"] is None)
+            *(
+                _limited_supplement(limit, deidentify, document)
+                for document in documents
+                if document["deidentified"] is None
+            )
         )
     )
     return usages
+
+
+async def _limited_supplement(
+    limit: asyncio.Semaphore,
+    operation: Callable[[store.Document], Awaitable[TokenUsage]],
+    document: store.Document,
+) -> TokenUsage:
+    """Run one missing-field operation within this run's concurrency bound."""
+    async with limit:
+        return await operation(document)
 
 
 def _deidentification_input(document: store.Document) -> dict[str, object]:

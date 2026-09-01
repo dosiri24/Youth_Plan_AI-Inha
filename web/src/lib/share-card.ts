@@ -1,3 +1,5 @@
+import { encode } from "uqr";
+
 import type { CityType } from "@/lib/city-types";
 
 /**
@@ -7,6 +9,17 @@ import type { CityType } from "@/lib/city-types";
 const BAND_RATIO = 0.19;
 const BRAND = "유스플랜AI";
 const CAPTION = "인천시 2045 도시기본계획 도시유형테스트";
+
+/** A bare code says nothing about why it is there, so the band tells the reader. */
+const QR_LABEL = ["찍으면 나도", "해볼 수 있어요"];
+
+/** The quiet zone the QR spec requires, carried inside the matrix so the plate is it. */
+const QR_BORDER = 4;
+
+/** Reading the address off the page keeps the card correct wherever it is deployed. */
+function participationUrl(): string {
+  return window.location.origin;
+}
 
 /** Loading outside the DOM keeps the export independent of the card's layout state. */
 async function loadIllustration(source: string): Promise<HTMLImageElement> {
@@ -66,6 +79,47 @@ async function createCardFile(type: CityType): Promise<File> {
   context.font = `500 ${Math.round(band * 0.145)}px ${family}`;
   context.fillText(CAPTION, inset, sheetHeight + band * 0.75);
 
+  // Whole-pixel modules only: a fractional module blurs exactly the edges a scanner
+  // reads, so the plate shrinks to the rounded size instead of stretching to fit.
+  const qr = encode(participationUrl(), { border: QR_BORDER, ecc: "M" });
+  const moduleSize = Math.max(1, Math.floor((band * 0.86) / qr.size));
+  const plate = moduleSize * qr.size;
+  const plateX = width - inset - plate;
+  const plateY = sheetHeight + Math.round((band - plate) / 2);
+
+  // Dark modules on their own white plate, because inverting a code onto the blue is
+  // what scanners refuse. The matrix carries its own border, so the plate is the code.
+  context.fillStyle = "#ffffff";
+  context.fillRect(plateX, plateY, plate, plate);
+  context.fillStyle = theme.getPropertyValue("--foreground").trim();
+  qr.data.forEach((row, rowIndex) =>
+    row.forEach((dark, columnIndex) => {
+      if (!dark) return;
+
+      context.fillRect(
+        plateX + columnIndex * moduleSize,
+        plateY + rowIndex * moduleSize,
+        moduleSize,
+        moduleSize,
+      );
+    }),
+  );
+
+  const labelSize = Math.round(band * 0.105);
+  const labelGap = Math.round(band * 0.125);
+  context.fillStyle = "#ffffff";
+  context.font = `600 ${labelSize}px ${family}`;
+  context.textAlign = "right";
+  context.textBaseline = "middle";
+  QR_LABEL.forEach((line, index) => {
+    const offset = (index - (QR_LABEL.length - 1) / 2) * labelGap;
+    context.fillText(
+      line,
+      plateX - Math.round(band * 0.06),
+      plateY + plate / 2 + offset,
+    );
+  });
+
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, "image/png"),
   );
@@ -79,10 +133,11 @@ async function createCardFile(type: CityType): Promise<File> {
   });
 }
 
-function canShareFiles(file: File): boolean {
+/** Asking about the exact payload, since a target may accept the file but not the rest. */
+function canShare(payload: ShareData): boolean {
   if (typeof navigator === "undefined" || !navigator.share) return false;
 
-  return navigator.canShare?.({ files: [file] }) ?? false;
+  return navigator.canShare?.(payload) ?? false;
 }
 
 function saveFile(file: File): void {
@@ -99,17 +154,21 @@ function saveFile(file: File): void {
 /** Desktop browsers without the Share API still get the card, as PLAN 9.3 requires. */
 export async function shareTypeCard(type: CityType): Promise<void> {
   const file = await createCardFile(type);
+  // Some targets append the url to the text and some show only one of them, so the
+  // text has to end well either way and must not carry the address itself.
+  const payload: ShareData = {
+    files: [file],
+    title: `유스플랜AI ${type.nickname}`,
+    text: "내가 바라는 2045년 인천의 도시유형이에요. 나도 해보기",
+    url: participationUrl(),
+  };
 
-  if (!canShareFiles(file)) {
+  if (!canShare(payload)) {
     saveFile(file);
     return;
   }
 
-  await navigator.share({
-    files: [file],
-    title: `유스플랜AI ${type.nickname}`,
-    text: "내가 바라는 2045년 인천의 도시유형이에요.",
-  });
+  await navigator.share(payload);
 }
 
 /** Direct download always saves the generated image without opening a share sheet. */

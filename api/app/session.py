@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal, TypedDict
 from uuid import uuid4
 
 from app.axes import Evidence
+
+SESSION_IDLE_LIMIT = timedelta(minutes=60)
 
 if TYPE_CHECKING:
     from app.report import PersonalReport
@@ -33,6 +35,7 @@ class Session(TypedDict):
     """Define the current in-memory session shape."""
 
     session_id: str
+    device_token: str
     birth_year: int
     age_2045: int
     gender: Literal["male", "female", "other"]
@@ -54,11 +57,13 @@ sessions: dict[str, Session] = {}
 def create_session(
     birth_year: int,
     gender: Literal["male", "female", "other"],
+    device_token: str,
 ) -> Session:
     """Create and retain one active in-memory interview session."""
     session_id = str(uuid4())
     current: Session = {
         "session_id": session_id,
+        "device_token": device_token,
         "birth_year": birth_year,
         "age_2045": 2045 - birth_year,
         "gender": gender,
@@ -85,6 +90,19 @@ def find_session(session_id: str) -> Session | None:
 def discard_session(session_id: str) -> None:
     """Discard one session without persistence."""
     sessions.pop(session_id, None)
+
+
+def discard_stale_sessions() -> None:
+    """Discard sessions whose latest activity exceeds the idle limit."""
+    cutoff = datetime.now(UTC) - SESSION_IDLE_LIMIT
+    stale_ids = [
+        session_id
+        for session_id, current in sessions.items()
+        if (current["messages"][-1]["timestamp"] if current["messages"] else current["created_at"])
+        < cutoff
+    ]
+    for session_id in stale_ids:
+        discard_session(session_id)
 
 
 def save_greeting(current: Session, text: str) -> None:

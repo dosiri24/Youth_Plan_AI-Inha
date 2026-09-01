@@ -268,21 +268,35 @@ class Draft:
     token_usage: TokenUsage
 
 
-async def generate_draft(current: session.Session, type_result: TypeResult) -> Draft:
+@dataclass
+class DraftDiagnostics:
+    """Expose content-free request measurements to the result endpoint."""
+
+    payload_length: int = 0
+
+
+async def generate_draft(
+    current: session.Session,
+    type_result: TypeResult,
+    diagnostics: DraftDiagnostics | None = None,
+) -> Draft:
     """Give structuring the slim transcript, fixed judgement, and the axis contract."""
+    contents = json.dumps(
+        {
+            "transcript": session.serialize_transcript(current["messages"]),
+            "type_result": type_result,
+            # Without the definitions the report has to guess what each letter means.
+            "axis_definitions": axes.load_definitions(),
+            "districts": regions.load_district_table(),
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    if diagnostics is not None:
+        diagnostics.payload_length = len(contents)
     structured_text, usage = await _generate(
         "structuring.md",
-        json.dumps(
-            {
-                "transcript": session.serialize_transcript(current["messages"]),
-                "type_result": type_result,
-                # Without the definitions the report has to guess what each letter means.
-                "axis_definitions": axes.load_definitions(),
-                "districts": regions.load_district_table(),
-            },
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ),
+        contents,
         response_schema=StructuredReport,
     )
     structured = _check_quotes(

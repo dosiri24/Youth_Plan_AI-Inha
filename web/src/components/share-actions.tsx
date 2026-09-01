@@ -28,7 +28,7 @@ export function ShareActions({
         ) : (
           <Share2 aria-hidden="true" className="size-5" />
         )}
-        {action === "share" ? "공유 준비 중" : "공유하기"}
+        {action === "share" ? "공유 준비 중" : "테스트 공유하기"}
       </Button>
       <Button
         className="h-14 rounded-2xl text-[15px] font-bold"

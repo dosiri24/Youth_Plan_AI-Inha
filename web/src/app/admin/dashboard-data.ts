@@ -3,6 +3,7 @@ import type {
   AxisLetter,
   AxisName,
   DashboardPerson,
+  Gender,
   SettlementField,
 } from "@/lib/api";
 
@@ -113,6 +114,17 @@ export function regionLabel(region: string): string {
   return region || "(미확인)";
 }
 
+const GENDER_LABELS: Record<Gender, string> = {
+  male: "남성",
+  female: "여성",
+  other: "기타",
+};
+
+/** The stored enum is never what an officer reads, on screen or in the export. */
+export function genderLabel(gender: Gender): string {
+  return GENDER_LABELS[gender];
+}
+
 const STAMP = new Intl.DateTimeFormat("ko-KR", {
   month: "long",
   day: "numeric",
@@ -134,22 +146,31 @@ export function formatDayRange(people: DashboardPerson[]): string {
   return `${DAY.format(times[0])} ~ ${DAY.format(times[times.length - 1])}`;
 }
 
-/** The column order is the contract officers paste into their own sheets. */
+/** The column order is the contract officers paste into their own sheets.
+    Everything that repeats down a participant's rows comes first and everything that
+    varies from row to row follows, so the officer can see which is which without
+    reading two rows side by side. */
 const CSV_COLUMNS = [
   "참여자",
+  "중복 기기",
   "거주 군·구",
   "거주지 원문",
   "행정동",
   "나이",
+  "성별",
+  "도시유형",
+  "정착 의향(거주)",
+  "정착 의향(근무)",
+  "정착 의향(여가)",
+  "만족도(대화 방식이 편했다, 1~5)",
+  "만족도(결과가 내 생각을 담았다, 1~5)",
+  "인터뷰 소요시간(초)",
   "부문",
   "요구",
   "키워드",
   "언급 장소 원문",
   "언급 장소 군·구",
   "최우선 여부",
-  "정착 의향(거주)",
-  "정착 의향(근무)",
-  "정착 의향(여가)",
 ];
 
 /** Places are joined rather than split into rows, so the two columns stay aligned.
@@ -158,30 +179,66 @@ const CSV_COLUMNS = [
 const PLACE_JOIN = " · ";
 
 /**
+ * Label every browser that submitted more than once, and nothing else.
+ * Repeat participation is counted rather than blocked, so the officer has to see which
+ * submissions share a browser; the token itself is a linking key they have no use for,
+ * so only the grouping crosses over. Groups are numbered in the order their token first
+ * appears, which is the ordering that already fixes P01, P02, … — so the same run
+ * exports the same labels every time.
+ */
+function deviceGroups(people: DashboardPerson[]): Map<string, string> {
+  const counts = new Map<string, number>();
+  people.forEach(({ device_token: token }) => {
+    if (token) counts.set(token, (counts.get(token) ?? 0) + 1);
+  });
+
+  const groups = new Map<string, string>();
+  people.forEach(({ device_token: token }) => {
+    if (!token || (counts.get(token) ?? 0) < 2 || groups.has(token)) return;
+    groups.set(token, `D${String(groups.size + 1).padStart(2, "0")}`);
+  });
+
+  return groups;
+}
+
+/**
  * Re-counting these in Excel is the officer's actual job, so the demands must export.
  * Extra demands arrive in the same list as the axis ones and get a row on the same
  * terms; a submission with no blinded copy yet has no demands and so no rows.
  */
 export function buildDemandCsv(people: DashboardPerson[]): string {
   const quote = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  /* A skipped rating and a transcript too short to time both arrive as zero and both
+     leave as a blank: averaged as a real answer either would drag the statistic the
+     officer takes off the sheet toward zero. */
+  const measured = (value: number | null) => (value ? String(value) : "");
+  const groups = deviceGroups(people);
   const rows = [CSV_COLUMNS];
 
   people.forEach((person, index) => {
-    const id = `P${String(index + 1).padStart(2, "0")}`;
+    const participant = [
+      `P${String(index + 1).padStart(2, "0")}`,
+      (person.device_token && groups.get(person.device_token)) || "",
+      regionLabel(person.region),
+      person.raw_region,
+      person.dong,
+      String(person.age),
+      genderLabel(person.gender),
+      person.code,
+      ...SETTLEMENT_FIELDS.map(([field]) => person.settlement[field] ?? ""),
+      measured(person.satisfaction?.ease ?? null),
+      measured(person.satisfaction?.accuracy ?? null),
+      measured(person.duration_seconds ?? null),
+    ];
     person.demands.forEach((demand) => {
       rows.push([
-        id,
-        regionLabel(person.region),
-        person.raw_region,
-        person.dong,
-        String(person.age),
+        ...participant,
         sectorLabel(demand.sector, demand.subsector),
         demand.title,
         demand.keywords.join(PLACE_JOIN),
         demand.places.map((place) => place.text).join(PLACE_JOIN),
         demand.places.map((place) => place.district).join(PLACE_JOIN),
         demand.top ? "최우선" : "",
-        ...SETTLEMENT_FIELDS.map(([field]) => person.settlement[field] ?? ""),
       ]);
     });
   });
