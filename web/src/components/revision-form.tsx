@@ -201,7 +201,7 @@ export function RevisionForm({
             </p>
             <textarea
               id="revision-comment"
-              className="mt-4 min-h-28 w-full resize-none rounded-[18px] bg-muted px-4 py-3 text-[15px] leading-6 outline-none transition focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed"
+              className="mt-4 min-h-28 w-full resize-none rounded-[18px] bg-muted px-4 py-3 text-base leading-6 outline-none transition focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed"
               onChange={(event) => setComment(event.target.value)}
               placeholder="예: 조용한 환경도 좋지만, 청년들이 자연스럽게 만날 공간이 더 중요해요."
               value={comment}

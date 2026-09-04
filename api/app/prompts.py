@@ -17,6 +17,13 @@ AXIS_HINT_TOPICS = {
     "OW": "도시가 무엇을 먼저 챙기기를 바라는지",
     "FH": "도시가 변해 갈 때 어떤 방식이기를 바라는지",
 }
+# Field observations showed abstract topics copied verbatim, so opener guidance stays separate.
+AXIS_HINT_OPENERS: dict[str, str] = {
+    "FH": (
+        "이 성질은 루브릭의 '지금 거기 있는 것' 질문으로 엶. 참여자가 직접 꺼낸 장소나 "
+        "참여자가 생기길 바란 시설의 자리를 대상으로 삼고, 대상이 없으면 미룸"
+    ),
+}
 PacingMode = Literal["continue", "extend", "closing"]
 
 
@@ -88,13 +95,14 @@ def build_opening_instruction() -> str:
 
 def build_operational_instruction(
     mode: PacingMode,
-    hint_topic: str | None = None,
+    hint_axis: str | None = None,
     retry: bool = False,
 ) -> str:
     """Build one pacing and optional coverage instruction block."""
     if mode == "closing":
         instructions = [_BEGIN_CLOSING]
-        if hint_topic:
+        if hint_axis:
+            hint_topic = AXIS_HINT_TOPICS[hint_axis]
             instructions.append(
                 "덧붙임을 물을 때 다음 성질의 이야기를 좀 더 듣고 싶다고 언급하고 "
                 f"그쪽도 열어 둘 것: {hint_topic}"
@@ -102,7 +110,8 @@ def build_operational_instruction(
         return _format_operational_instruction(instructions)
 
     instructions = [_KEEP_GOING]
-    if hint_topic:
+    if hint_axis:
+        hint_topic = AXIS_HINT_TOPICS[hint_axis]
         if retry:
             instructions.append(
                 "다음 성질의 이야기를 앞서 물었으나 아직 나오지 않았음. 앞선 대화 맥락을 고려하여, "
@@ -112,7 +121,8 @@ def build_operational_instruction(
         elif mode == "extend":
             instructions.append(
                 "다음 성질의 이야기를 오늘 거의 듣지 못했음. 이번 응답에서는 그 성질이 드러날 "
-                f"2045년의 장면을 하나 골라 물을 것: {hint_topic}"
+                "2045년의 장면을 하나 골라 물되, 장면은 참여자가 세운 2045년의 무대 위에서 "
+                f"고를 것: {hint_topic}"
             )
         else:
             instructions.append(
@@ -122,15 +132,17 @@ def build_operational_instruction(
                 "옮겨 적지 말 것"
                 f"(이미 그 이야기가 나왔다면 따르지 않아도 됨): {hint_topic}"
             )
+        if opener := AXIS_HINT_OPENERS.get(hint_axis):
+            instructions.append(opener)
     return _format_operational_instruction(instructions)
 
 
 def append_operational_instruction(
     text: str,
     mode: PacingMode,
-    hint_topic: str | None = None,
+    hint_axis: str | None = None,
     retry: bool = False,
 ) -> str:
     """Append backend guidance after every participant utterance."""
-    instruction = build_operational_instruction(mode, hint_topic, retry)
+    instruction = build_operational_instruction(mode, hint_axis, retry)
     return f"{text}\n{instruction}"

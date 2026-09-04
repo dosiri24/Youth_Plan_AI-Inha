@@ -14,8 +14,9 @@ class Settings(BaseSettings):
     claude_model: str = "claude-sonnet-5"
     file_search_store_name: str | None = None
     gcp_project_id: str | None = None
+    interview_effort: str = "medium"
     interview_target_turns: int = 14
-    interview_hint_turn: int = 5
+    interview_hint_turn: int = 6
     interview_wrapup_turn: int = 10
     interview_max_extra_turns: int = 4
     max_live_sessions: int = 40

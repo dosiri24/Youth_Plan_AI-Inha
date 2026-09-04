@@ -54,6 +54,30 @@ class ActivityStore(ABC):
         """Return every stored activity event."""
 
 
+class FailureStore(ABC):
+    """Define the failure-report persistence contract shared across backends."""
+
+    @abstractmethod
+    def record(self, document: Document) -> None:
+        """Persist one participant-approved failure report."""
+
+    @abstractmethod
+    def list(self) -> list[Document]:
+        """Return every stored failure report."""
+
+
+class PrizeEntryStore(ABC):
+    """Define storage kept apart from policy submissions and analysis."""
+
+    @abstractmethod
+    def save(self, entry_id: str, document: Document) -> None:
+        """Persist or replace one prize entry under its deduplication id."""
+
+    @abstractmethod
+    def list(self) -> list[Document]:
+        """Return every stored prize entry."""
+
+
 class InMemorySubmissionStore(SubmissionStore):
     """Hold submissions in process memory when no GCP project is configured."""
 
@@ -137,6 +161,38 @@ class InMemoryActivityStore(ActivityStore):
         return [dict(document) for document in self._documents]
 
 
+class InMemoryFailureStore(FailureStore):
+    """Hold failure reports in memory when no GCP project is configured."""
+
+    def __init__(self) -> None:
+        """Start with an empty failure report list."""
+        self._documents: list[Document] = []
+
+    def record(self, document: Document) -> None:
+        """Append one participant-approved failure report."""
+        self._documents.append(document)
+
+    def list(self) -> list[Document]:
+        """Return copies of all recorded failure reports."""
+        return [dict(document) for document in self._documents]
+
+
+class InMemoryPrizeEntryStore(PrizeEntryStore):
+    """Hold prize entries outside submissions during local development."""
+
+    def __init__(self) -> None:
+        """Start with an empty entry map."""
+        self._documents: dict[str, Document] = {}
+
+    def save(self, entry_id: str, document: Document) -> None:
+        """Upsert one entry so the same phone number has one draw chance."""
+        self._documents[entry_id] = document
+
+    def list(self) -> list[Document]:
+        """Return copies without exposing the internal deduplication id."""
+        return [dict(document) for document in self._documents.values()]
+
+
 class FirestoreSubmissionStore(SubmissionStore):
     """Persist submissions in the contracted Firestore collection."""
 
@@ -210,9 +266,40 @@ class FirestoreActivityStore(ActivityStore):
         return [{**snapshot.to_dict()} for snapshot in get_client().collection("activity").stream()]
 
 
+class FirestoreFailureStore(FailureStore):
+    """Persist failure reports in the contracted Firestore collection."""
+
+    def record(self, document: Document) -> None:
+        """Store one failure report under an automatically generated document id."""
+        get_client().collection("failure_reports").document().set(document)
+
+    def list(self) -> list[Document]:
+        """Return every Firestore failure report."""
+        return [
+            {**snapshot.to_dict()}
+            for snapshot in get_client().collection("failure_reports").stream()
+        ]
+
+
+class FirestorePrizeEntryStore(PrizeEntryStore):
+    """Persist prize contacts in a collection separate from submissions."""
+
+    def save(self, entry_id: str, document: Document) -> None:
+        """Upsert one entry under a non-phone document id."""
+        get_client().collection("prize_entries").document(entry_id).set(document)
+
+    def list(self) -> list[Document]:
+        """Return prize entries for controlled draw operations."""
+        return [
+            {**snapshot.to_dict()} for snapshot in get_client().collection("prize_entries").stream()
+        ]
+
+
 _store: SubmissionStore | None = None
 _analysis_store: AnalysisStore | None = None
 _activity_store: ActivityStore | None = None
+_failure_store: FailureStore | None = None
+_prize_entry_store: PrizeEntryStore | None = None
 
 
 def get_store() -> SubmissionStore:
@@ -246,3 +333,25 @@ def get_activity_store() -> ActivityStore:
         else:
             _activity_store = InMemoryActivityStore()
     return _activity_store
+
+
+def get_failure_store() -> FailureStore:
+    """Return the active failure report store."""
+    global _failure_store
+    if _failure_store is None:
+        if get_settings().gcp_project_id:
+            _failure_store = FirestoreFailureStore()
+        else:
+            _failure_store = InMemoryFailureStore()
+    return _failure_store
+
+
+def get_prize_entry_store() -> PrizeEntryStore:
+    """Return the store isolated from policy submissions."""
+    global _prize_entry_store
+    if _prize_entry_store is None:
+        if get_settings().gcp_project_id:
+            _prize_entry_store = FirestorePrizeEntryStore()
+        else:
+            _prize_entry_store = InMemoryPrizeEntryStore()
+    return _prize_entry_store

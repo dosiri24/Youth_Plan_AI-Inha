@@ -45,7 +45,7 @@ async def _run(
 ) -> AsyncIterator[str]:
     """Execute one interview turn and emit participant-safe SSE events."""
     settings = get_settings()
-    mode, hint_topic, retry = (
+    mode, hint_axis, retry = (
         _pacing(current, turn, settings) if user_text is not None else ("continue", None, False)
     )
     scoring_task = _start_scoring(current, user_text, turn)
@@ -59,7 +59,7 @@ async def _run(
             user_text,
             settings,
             mode,
-            hint_topic,
+            hint_axis,
             retry,
         ):
             if current_usage is not None:
@@ -184,7 +184,7 @@ def _pacing(
             closing=True,
             mode=mode,
         )
-        return mode, prompts.AXIS_HINT_TOPICS[axis], False
+        return mode, axis, False
 
     if mode == "continue" and turn < settings.interview_hint_turn:
         return mode, None, False
@@ -228,7 +228,7 @@ def _pacing(
         attempt=len(attempts),
         mode=mode,
     )
-    return mode, prompts.AXIS_HINT_TOPICS[axis], retry
+    return mode, axis, retry
 
 
 def _text_stream(
@@ -236,7 +236,7 @@ def _text_stream(
     user_text: str | None,
     settings: Settings,
     mode: prompts.PacingMode,
-    hint_topic: str | None,
+    hint_axis: str | None,
     retry: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Select the configured interviewer text stream."""
@@ -246,7 +246,7 @@ def _text_stream(
             user_text,
             settings,
             mode,
-            hint_topic,
+            hint_axis,
             retry,
         )
     return _gemini_text_stream(
@@ -254,7 +254,7 @@ def _text_stream(
         user_text,
         settings,
         mode,
-        hint_topic,
+        hint_axis,
         retry,
     )
 
@@ -264,11 +264,11 @@ async def _gemini_text_stream(
     user_text: str | None,
     settings: Settings,
     mode: prompts.PacingMode,
-    hint_topic: str | None,
+    hint_axis: str | None,
     retry: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Yield Gemini interviewer text and usage updates."""
-    contents = _build_contents(current, user_text, mode, hint_topic, retry)
+    contents = _build_contents(current, user_text, mode, hint_axis, retry)
     tool = knowledge.file_search_tool()
     config = types.GenerateContentConfig(
         system_instruction=prompts.build_fixed_prefix(current["age_2045"]),
@@ -291,7 +291,7 @@ async def _claude_text_stream(
     user_text: str | None,
     settings: Settings,
     mode: prompts.PacingMode,
-    hint_topic: str | None,
+    hint_axis: str | None,
     retry: bool,
 ) -> AsyncIterator[tuple[str, dict[str, int] | None]]:
     """Yield Claude interviewer text and final usage."""
@@ -301,6 +301,9 @@ async def _claude_text_stream(
         model=settings.claude_model,
         max_tokens=4096,
         thinking=_claude_thinking(settings.claude_model),
+        # Thinking was 86% of output tokens at the default effort, and the resulting
+        # 20-30s turns lost participants mid-interview during the 2026-09-03 pilot.
+        output_config={"effort": settings.interview_effort},
         system=[
             {
                 "type": "text",
@@ -312,7 +315,7 @@ async def _claude_text_stream(
             current,
             user_text,
             mode,
-            hint_topic,
+            hint_axis,
             retry,
         ),
     ) as stream:
@@ -334,7 +337,7 @@ def _build_claude_messages(
     current: session.Session,
     user_text: str | None,
     mode: prompts.PacingMode,
-    hint_topic: str | None = None,
+    hint_axis: str | None = None,
     retry: bool = False,
 ) -> list[dict[str, str]]:
     """Build text-only Claude messages with the current instruction last."""
@@ -351,7 +354,7 @@ def _build_claude_messages(
         else prompts.append_operational_instruction(
             user_text,
             mode,
-            hint_topic,
+            hint_axis,
             retry,
         )
     )
@@ -363,7 +366,7 @@ def _build_contents(
     current: session.Session,
     user_text: str | None,
     mode: prompts.PacingMode,
-    hint_topic: str | None = None,
+    hint_axis: str | None = None,
     retry: bool = False,
 ) -> list[types.Content]:
     """Build full conversation contents with the current utterance and its instruction last."""
@@ -380,7 +383,7 @@ def _build_contents(
     assembled = prompts.append_operational_instruction(
         user_text,
         mode,
-        hint_topic,
+        hint_axis,
         retry,
     )
     contents.append(_content("user", assembled))

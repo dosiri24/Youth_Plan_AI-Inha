@@ -10,14 +10,18 @@ import {
 import { Check, LoaderCircle, LockKeyhole } from "lucide-react";
 
 import { AxisReasons } from "@/components/axis-reasons";
+import { AxisStrengths } from "@/components/axis-strengths";
 import { CityTypeCard } from "@/components/city-type-card";
 import { ReportOverview } from "@/components/report-overview";
 import { ResultLoading } from "@/components/result-loading";
 import { RevisionForm, REVISION_FORM_ID } from "@/components/revision-form";
 import { ShareActions, type CardAction } from "@/components/share-actions";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { TypeSummary } from "@/components/type-summary";
+import { Button } from "@/components/ui/button";
 import {
+  enterPrize,
   generateResult,
+  reportFailure,
   reviseResult,
   submitResult,
   type PersonalReport,
@@ -25,11 +29,14 @@ import {
   type RevisionSelection,
   type TypeResult,
 } from "@/lib/api";
-import { getCityType } from "@/lib/city-types";
-import { PRIZE_DRAW_OPEN, PRIZE_FORM_URL } from "@/lib/prize";
-import { downloadTypeCard, shareTypeCard } from "@/lib/share-card";
+import { getCityType, type CityType } from "@/lib/city-types";
+import { PRIZE_DRAW_OPEN } from "@/lib/prize";
+import {
+  createTypeCard,
+  downloadTypeCard,
+  shareTypeCard,
+} from "@/lib/share-card";
 import { useBackGuard } from "@/lib/use-back-guard";
-import { cn } from "@/lib/utils";
 
 type ResultScreenProps = {
   sessionId: string;
@@ -59,10 +66,23 @@ function ResultHeader({ description, title }: ResultHeaderProps) {
 }
 
 /** Going forward and going back belong at the thumb, not at the top corner (PLAN 2.4). */
-function ActionBar({ children }: { children: ReactNode }) {
+function ActionBar({
+  children,
+  notice,
+}: {
+  children: ReactNode;
+  notice?: ReactNode;
+}) {
   return (
-    <div className="flex shrink-0 gap-2.5 bg-card px-5 pt-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] shadow-[0_-6px_20px_rgba(23,25,26,0.06)]">
-      {children}
+    <div className="shrink-0 bg-card px-5 pt-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] shadow-[0_-6px_20px_rgba(23,25,26,0.06)]">
+      {/* The note rides above the row rather than inside it, so the buttons keep
+          their full height whether or not one is shown. */}
+      {notice && (
+        <div className="mb-2.5 text-center text-[13px] leading-5 text-muted-foreground">
+          {notice}
+        </div>
+      )}
+      <div className="flex gap-2.5">{children}</div>
     </div>
   );
 }
@@ -71,16 +91,18 @@ function ActionBar({ children }: { children: ReactNode }) {
 function ResultStepLayout({
   actions,
   children,
+  notice,
 }: {
   actions: ReactNode;
   children: ReactNode;
+  notice?: ReactNode;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {children}
       </div>
-      <ActionBar>{actions}</ActionBar>
+      <ActionBar notice={notice}>{actions}</ActionBar>
     </div>
   );
 }
@@ -88,10 +110,26 @@ function ResultStepLayout({
 type ResultFailedProps = {
   onRetry: () => void;
   onReturn: () => void;
+  sessionId: string;
 };
 
-/** A failed generation leaves the session intact, so asking again is the way out. */
-function ResultFailed({ onRetry, onReturn }: ResultFailedProps) {
+type FailureReportState = "idle" | "sending" | "sent" | "failed";
+
+/** A failed generation leaves the session intact, so asking again is the way out, and
+    the transcript that would explain the failure goes only if the participant sends it. */
+function ResultFailed({ onRetry, onReturn, sessionId }: ResultFailedProps) {
+  const [reportState, setReportState] = useState<FailureReportState>("idle");
+
+  const report = async () => {
+    setReportState("sending");
+    try {
+      await reportFailure(sessionId);
+      setReportState("sent");
+    } catch {
+      setReportState("failed");
+    }
+  };
+
   return (
     <section className="flex flex-1 flex-col items-center justify-center bg-card px-6 text-center">
       <h1 className="text-[26px] leading-9 font-bold tracking-[-0.03em]">
@@ -106,13 +144,36 @@ function ResultFailed({ onRetry, onReturn }: ResultFailedProps) {
       >
         다시 시도
       </Button>
-      <Button
-        className="mt-2.5 h-14 w-full rounded-2xl text-[15px] font-bold"
-        onClick={onReturn}
-        variant="secondary"
-      >
-        처음 화면으로
-      </Button>
+      {/* Once the log is sent the screen would otherwise be a dead end, so the way
+          out takes the same slot rather than adding a third button. */}
+      {reportState === "sent" ? (
+        <Button
+          className="mt-2.5 h-14 w-full rounded-2xl text-[15px] font-bold"
+          onClick={onReturn}
+          variant="secondary"
+        >
+          처음 화면으로
+        </Button>
+      ) : (
+        <Button
+          className="mt-2.5 h-14 w-full rounded-2xl text-[15px] font-bold"
+          disabled={reportState === "sending"}
+          onClick={() => void report()}
+          variant="secondary"
+        >
+          {reportState === "sending" ? "보내는 중…" : "오류 기록 보내기"}
+        </Button>
+      )}
+      <p className="mt-4 text-[13px] leading-5 text-muted-foreground">
+        {reportState === "sent"
+          ? "기록을 보냈어요. 고맙습니다."
+          : "무엇이 잘못됐는지 찾을 수 있게 나눈 대화가 함께 전송돼요."}
+      </p>
+      {reportState === "failed" && (
+        <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">
+          보내지 못했어요. 잠시 뒤 다시 눌러 주세요.
+        </p>
+      )}
     </section>
   );
 }
@@ -126,14 +187,42 @@ function ResultNotice() {
         className="mt-0.5 size-4 shrink-0 text-incheon-gray"
       />
       <p className="text-[13px] leading-5 text-muted-foreground">
-        이 결과는 지금 화면에만 남아 있어요. 새로고침하거나 화면을 벗어나면 다시
-        볼 수 없어요.
+        새로고침하거나 화면을 벗어나면 이 화면을 다시 볼 수 없어요.
       </p>
     </div>
   );
 }
 
 const SCALE_SCORES = [1, 2, 3, 4, 5];
+
+const SATISFACTION_ID = "satisfaction";
+const PRIZE_ENTRY_ID = "prize-entry";
+
+function formatPrizePhone(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
+function prizePhoneDigits(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function isValidPrizePhone(value: string): boolean {
+  return /^010\d{8}$/.test(prizePhoneDigits(value));
+}
+
+function scrollToPrizeEntry() {
+  const field = document.getElementById(PRIZE_ENTRY_ID);
+  field?.scrollIntoView({
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth",
+    block: "center",
+  });
+  window.setTimeout(() => field?.focus(), 350);
+}
 
 type ScaleQuestionProps = {
   highLabel: string;
@@ -204,68 +293,85 @@ function Satisfaction({
   onEaseChange,
 }: SatisfactionProps) {
   return (
-    <section className="space-y-7 rounded-[24px] bg-card p-5">
+    <section
+      className="space-y-7 rounded-[24px] bg-card p-5"
+      id={SATISFACTION_ID}
+    >
       <ScaleQuestion
-        highLabel="편했어요"
-        lowLabel="불편했어요"
+        highLabel="AI가 더 편해요"
+        lowLabel="직접이 더 편해요"
         name="satisfaction-ease"
         onChange={onEaseChange}
-        question="이렇게 대화로 의견을 내는 방식이 편했나요?"
+        question="AI를 통해 인터뷰하는 것이 직접 의견을 제시하는 것보다 편한가요?"
         value={ease}
       />
       <ScaleQuestion
-        highLabel="잘 담겼어요"
-        lowLabel="아니에요"
+        highLabel="만족해요"
+        lowLabel="불만족해요"
         name="satisfaction-accuracy"
         onChange={onAccuracyChange}
-        question="정리된 결과가 내 생각을 잘 담고 있나요?"
+        question="AI가 정리한 나의 요구와 유형 테스트에 만족하나요?"
         value={accuracy}
       />
     </section>
   );
 }
 
-/** The draw runs on a separate form so contact details never enter the submission. */
-function PrizeEntry() {
+type PrizeEntryProps = {
+  invalid: boolean;
+  onChange: (value: string) => void;
+  pending: boolean;
+  value: string;
+};
+
+/** The field shares the review screen, while its value takes a separate storage path. */
+function PrizeEntry({ invalid, onChange, pending, value }: PrizeEntryProps) {
   return (
-    <section className="rounded-[20px] bg-card px-4 py-4">
-      <h2 className="text-[15px] font-bold">
-        스타벅스 쿠폰 추첨에 응모할 수 있어요
-      </h2>
-      <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
-        제출을 마치고 응모한 분들 중 10명을 무작위로 뽑아 스타벅스 쿠폰을
-        드려요. 수집이 끝나는 9월 말에 응모할 때 남긴 연락처로 따로 알려 드려요.
+    <section className="rounded-[24px] bg-card p-5">
+      <h2 className="text-[15px] font-bold">기프티콘 추첨 응모 (선택)</h2>
+      <input
+        aria-invalid={invalid}
+        aria-label="경품 응모용 휴대전화 번호"
+        autoComplete="tel"
+        className="mt-4 h-14 w-full rounded-2xl bg-muted px-4 text-base font-semibold outline-none transition placeholder:font-normal focus:ring-2 focus:ring-primary/20 aria-invalid:ring-2 aria-invalid:ring-incheon-gray/50 disabled:cursor-not-allowed"
+        disabled={pending}
+        id={PRIZE_ENTRY_ID}
+        inputMode="tel"
+        onChange={(event) => onChange(formatPrizePhone(event.target.value))}
+        placeholder="예: 010-1234-5678"
+        type="tel"
+        value={value}
+      />
+      <p className="mt-2.5 text-[11px] leading-[1.65] text-muted-foreground">
+        *전화번호는 경품 추첨, 안내, 발송을 위해서만 사용 후 폐기하며, 입력하면
+        이에 동의하는 것으로 간주됩니다. 또한 인천시에 전달되는 요구와는 별도로
+        보관됩니다.
       </p>
-      <a
-        className={cn(
-          buttonVariants({ variant: "secondary" }),
-          "mt-4 h-13 w-full rounded-2xl text-[15px] font-bold",
-        )}
-        href={PRIZE_FORM_URL}
-        rel="noreferrer"
-        target="_blank"
-      >
-        추첨 응모하러 가기
-      </a>
     </section>
   );
 }
 
 type SubmittedProps = {
   action: CardAction;
-  nickname: string;
-  typeResult: TypeResult;
+  card: File | null;
   onDownload: () => void;
+  onPrizeRetry: () => void;
   onShare: () => void;
+  prizeRetrying: boolean;
+  prizeSaveFailed: boolean;
+  type: CityType;
 };
 
 /** Submitted results stay entirely in volatile client state for sharing. */
 function Submitted({
   action,
-  nickname,
+  card,
   onDownload,
+  onPrizeRetry,
   onShare,
-  typeResult,
+  prizeRetrying,
+  prizeSaveFailed,
+  type,
 }: SubmittedProps) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background">
@@ -277,18 +383,33 @@ function Submitted({
           내 목소리가 제출됐어요
         </h1>
         <p className="mt-2 text-[15px] leading-6 text-muted-foreground">
-          도시유형 카드를 공유하거나 이미지로 간직해 보세요.
+          도시유형테스트를 친구들과 공유해 보세요.
         </p>
       </header>
 
       <div className="space-y-5 px-5 pt-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
-        <CityTypeCard nickname={nickname} typeResult={typeResult} />
+        <CityTypeCard card={card} type={type} />
         <ShareActions
           action={action}
           onDownload={onDownload}
           onShare={onShare}
         />
-        {PRIZE_DRAW_OPEN && <PrizeEntry />}
+        <TypeSummary type={type} />
+        {prizeSaveFailed && (
+          <section className="rounded-[20px] bg-card px-4 py-4">
+            <p className="text-[13px] leading-5 text-muted-foreground">
+              의견은 제출됐지만 기프티콘 응모를 완료하지 못했어요.
+            </p>
+            <Button
+              className="mt-3 h-12 w-full rounded-2xl text-[15px] font-bold"
+              disabled={prizeRetrying}
+              onClick={onPrizeRetry}
+              variant="secondary"
+            >
+              {prizeRetrying ? "응모하는 중…" : "기프티콘 응모 다시 시도"}
+            </Button>
+          </section>
+        )}
         <ResultNotice />
       </div>
     </div>
@@ -310,8 +431,14 @@ export function ResultScreen({
   const [submitting, setSubmitting] = useState(false);
   const [ease, setEase] = useState<number | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [prizePhone, setPrizePhone] = useState("");
+  const [prizePhoneInvalid, setPrizePhoneInvalid] = useState(false);
+  const [prizeSaveFailed, setPrizeSaveFailed] = useState(false);
+  const [prizeRetrying, setPrizeRetrying] = useState(false);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [cardAction, setCardAction] = useState<CardAction>(null);
+  const [card, setCard] = useState<File | null>(null);
+  const [cardSettled, setCardSettled] = useState(false);
   const [generationFailed, setGenerationFailed] = useState(false);
   const generatingRef = useRef(false);
 
@@ -326,6 +453,18 @@ export function ResultScreen({
       .then((fetched) => {
         setResult(fetched);
         setReport(fetched.report);
+        // Building here rather than on the reveal keeps the picture ready when the
+        // screen appears, so the card slot never opens empty.
+        void createTypeCard(
+          getCityType(fetched.type_result.code),
+          fetched.type_result,
+        )
+          .then(setCard)
+          .catch(() => {
+            // A card the browser could not draw leaves the fallback panel; it must not
+            // hold the reveal or discard the result (PLAN 9.3, D1).
+          })
+          .finally(() => setCardSettled(true));
       })
       .catch(() => setGenerationFailed(true))
       .finally(() => {
@@ -361,9 +500,27 @@ export function ResultScreen({
   const submit = async () => {
     if (submitting || revising) return;
 
+    if (
+      PRIZE_DRAW_OPEN &&
+      prizePhone.length > 0 &&
+      !isValidPrizePhone(prizePhone)
+    ) {
+      setPrizePhoneInvalid(true);
+      scrollToPrizeEntry();
+      return;
+    }
+
     setSubmitting(true);
     try {
-      setSubmissionId(await submitResult(sessionId, ease, accuracy));
+      const submittedId = await submitResult(sessionId, ease, accuracy);
+      if (PRIZE_DRAW_OPEN && prizePhone.length > 0) {
+        try {
+          await enterPrize(submittedId, prizePhoneDigits(prizePhone));
+        } catch {
+          setPrizeSaveFailed(true);
+        }
+      }
+      setSubmissionId(submittedId);
     } catch {
       onError();
     } finally {
@@ -371,12 +528,35 @@ export function ResultScreen({
     }
   };
 
+  const retryPrizeEntry = async () => {
+    if (!submissionId || prizeRetrying || !isValidPrizePhone(prizePhone))
+      return;
+
+    setPrizeRetrying(true);
+    try {
+      await enterPrize(submissionId, prizePhoneDigits(prizePhone));
+      setPrizeSaveFailed(false);
+    } catch {
+      setPrizeSaveFailed(true);
+    } finally {
+      setPrizeRetrying(false);
+    }
+  };
+
+  // A build that failed on arrival must still leave the buttons usable, so they draw
+  // the card themselves rather than staying disabled for the rest of the session.
+  const takeCard = async (typeResult: TypeResult): Promise<File> =>
+    card ?? (await createTypeCard(getCityType(typeResult.code), typeResult));
+
   const share = async () => {
     if (!result || cardAction !== null) return;
 
     setCardAction("share");
     try {
-      await shareTypeCard(getCityType(result.type_result.code));
+      await shareTypeCard(
+        await takeCard(result.type_result),
+        getCityType(result.type_result.code).nickname,
+      );
     } catch {
       // Share/save failure must not discard the result; only this attempt ends (PLAN 9.3, D1).
     } finally {
@@ -389,7 +569,7 @@ export function ResultScreen({
 
     setCardAction("download");
     try {
-      await downloadTypeCard(getCityType(result.type_result.code));
+      downloadTypeCard(await takeCard(result.type_result));
     } catch {
       // Share/save failure must not discard the result; only this attempt ends (PLAN 9.3, D1).
     } finally {
@@ -398,23 +578,36 @@ export function ResultScreen({
   };
 
   if (generationFailed)
-    return <ResultFailed onRetry={generate} onReturn={onReturn} />;
+    return (
+      <ResultFailed
+        onRetry={generate}
+        onReturn={onReturn}
+        sessionId={sessionId}
+      />
+    );
 
   if (!result || !report || !revealed)
     return (
-      <ResultLoading done={result !== null} onDone={() => setRevealed(true)} />
+      <ResultLoading
+        done={result !== null && cardSettled}
+        onDone={() => setRevealed(true)}
+      />
     );
 
   const typeResult = result.type_result;
+  const type = getCityType(typeResult.code);
 
   if (submissionId) {
     return (
       <Submitted
         action={cardAction}
-        nickname={report.self_info.nickname}
+        card={card}
         onDownload={() => void download()}
+        onPrizeRetry={() => void retryPrizeEntry()}
         onShare={() => void share()}
-        typeResult={typeResult}
+        prizeRetrying={prizeRetrying}
+        prizeSaveFailed={prizeSaveFailed}
+        type={type}
       />
     );
   }
@@ -429,25 +622,30 @@ export function ResultScreen({
             disabled={cardAction !== null}
             onClick={() => setStep("report")}
           >
-            내 이야기와 요구 확인하기
+            제출 전 요구 검토하기
           </Button>
         }
+        notice="다음 화면까지 확인해야 제출돼요"
       >
         <ResultHeader
-          description="대화를 바탕으로 정리한 내 도시유형이에요."
-          title="내 도시유형"
+          title={
+            report.self_info.nickname
+              ? `${report.self_info.nickname}님의 도시유형`
+              : "내 도시유형"
+          }
         />
         <div className="space-y-10 px-5 pt-6 pb-8">
           <div className="space-y-4">
-            <CityTypeCard
-              nickname={report.self_info.nickname}
-              typeResult={typeResult}
-            />
+            <CityTypeCard card={card} type={type} />
             <ShareActions
               action={cardAction}
               onDownload={() => void download()}
               onShare={() => void share()}
             />
+          </div>
+          <div className="space-y-4">
+            <TypeSummary type={type} />
+            <AxisStrengths axes={typeResult.axes} />
           </div>
           <AxisReasons reasons={report.axis_reasons} />
         </div>
@@ -484,8 +682,20 @@ export function ResultScreen({
             </Button>
           </>
         }
+        notice={
+          PRIZE_DRAW_OPEN &&
+          !isValidPrizePhone(prizePhone) && (
+            <button
+              className="rounded-md underline underline-offset-[3px] focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
+              onClick={scrollToPrizeEntry}
+              type="button"
+            >
+              전화번호 입력하고 기프티콘 응모하기
+            </button>
+          )
+        }
       >
-        <ResultHeader title="내 이야기와 요구 확인" />
+        <ResultHeader title="제출 전 요구 검토" />
         <div className="space-y-12 px-5 pt-6 pb-8">
           <ReportOverview report={report} />
 
@@ -511,8 +721,19 @@ export function ResultScreen({
               onAccuracyChange={setAccuracy}
               onEaseChange={setEase}
             />
+            {PRIZE_DRAW_OPEN && (
+              <PrizeEntry
+                invalid={prizePhoneInvalid}
+                onChange={(value) => {
+                  setPrizePhone(value);
+                  setPrizePhoneInvalid(false);
+                }}
+                pending={submitting}
+                value={prizePhone}
+              />
+            )}
             <p className="text-center text-[13px] leading-5 text-muted-foreground">
-              제출하면 이 보고서는 확정되고 더 이상 수정할 수 없어요.
+              제출 이후에는 수정할 수 없어요.
             </p>
           </div>
         </div>

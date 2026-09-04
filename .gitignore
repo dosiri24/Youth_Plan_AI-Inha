@@ -60,3 +60,7 @@ Interview2_workspace
 PROJECT_STATUS.md
 web/undefined/board.png
 web/public/city-types/*.jpeg
+
+# Local Firestore activity backups taken before a reset. Never published.
+activity-backup-*.json
+COLLECTION_PLAN.md

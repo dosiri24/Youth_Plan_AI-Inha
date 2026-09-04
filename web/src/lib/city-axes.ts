@@ -18,8 +18,8 @@ type AxisInfo = {
 export const AXIS_INFO: Record<AxisName, AxisInfo> = {
   AC: {
     title: "생활 리듬",
-    left: { letter: "A", label: "활기찬 도시", badge: "활기" },
-    right: { letter: "C", label: "여유로운 도시", badge: "여유" },
+    left: { letter: "A", label: "활기찬 도시", badge: "번화" },
+    right: { letter: "C", label: "여유로운 도시", badge: "한적" },
   },
   UN: {
     title: "선호 공간",
@@ -28,13 +28,13 @@ export const AXIS_INFO: Record<AxisName, AxisInfo> = {
   },
   OW: {
     title: "우선 가치",
-    left: { letter: "O", label: "기회가 많은 도시", badge: "기회" },
+    left: { letter: "O", label: "기회가 많은 도시", badge: "경쟁" },
     right: { letter: "W", label: "서로 돌보는 도시", badge: "포용" },
   },
   FH: {
     title: "발전 가치",
-    left: { letter: "F", label: "새로움을 여는 도시", badge: "새로움" },
-    right: { letter: "H", label: "이야기를 이어가는 도시", badge: "이야기" },
+    left: { letter: "F", label: "새로움을 여는 도시", badge: "개발" },
+    right: { letter: "H", label: "이야기를 이어가는 도시", badge: "보존" },
   },
 };
 

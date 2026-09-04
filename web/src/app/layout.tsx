@@ -19,7 +19,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   interactiveWidget: "resizes-content",
-  themeColor: "#f7f8f9",
+  // Matches --card, which is what every screen paints at its top edge, so the browser
+  // chrome does not sit in a different grey from the page under it.
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({

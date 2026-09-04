@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState, type FormEvent } from "react";
+import { ChevronDown, MapPin, MessagesSquare, Sparkles } from "lucide-react";
 
 import { InterviewScreen } from "@/components/interview-screen";
 import { MobileShell } from "@/components/mobile-shell";
@@ -9,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { VisitPing } from "@/components/visit-ping";
 import { createSession, type Gender } from "@/lib/api";
 import { readDeviceToken } from "@/lib/device-token";
-import { PRIZE_DRAW_OPEN } from "@/lib/prize";
+import { CONTACT_EMAIL, RESEARCHERS } from "@/lib/team";
 
 type Screen =
   | { name: "start" }
@@ -17,11 +18,11 @@ type Screen =
   | { name: "result"; sessionId: string }
   | { name: "error" };
 
-/** Bound entry to ages 16 to 29 as counted in 2026, keeping every participant clear of the guardian-consent threshold at 14. */
+/** Bound entry to ages 16 to 39 as counted in 2026, keeping every participant clear of the guardian-consent threshold at 14. */
 function isValidBirthYear(value: string): boolean {
   if (!/^\d{4}$/.test(value)) return false;
   const year = Number(value);
-  return year >= 1997 && year <= 2010;
+  return year >= 1987 && year <= 2010;
 }
 
 const GENDER_OPTIONS: { value: Gender; label: string }[] = [
@@ -29,6 +30,45 @@ const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: "female", label: "여성" },
   { value: "other", label: "기타" },
 ];
+
+/** What the participant gets, who may take part, and how long it takes: the three facts the start screen owes. */
+const ENTRY_FACTS = [
+  { Icon: Sparkles, text: "나도 몰랐던 내가 바라는 도시는?" },
+  { Icon: MapPin, text: "인천과 관련있는 누구나 가능" },
+  { Icon: MessagesSquare, text: "AI와 5~10분 인터뷰만으로" },
+];
+
+/** Written twice — once in the notice, once in the invisible copy that holds its place in
+ *  the flow — so the two can never drift apart. */
+const CONSENT_LINE = "버튼을 누르면 개인정보 수집·이용에 동의하게 됩니다.";
+
+type NoticeToggleProps = {
+  label: string;
+  onClick: () => void;
+  open: boolean;
+};
+
+/** The arrow the notice hangs on. It appears twice — once on the closed notice and once on
+ *  the panel that covers it — so each says which way it goes rather than sharing one name. */
+function NoticeToggle({ label, onClick, open }: NoticeToggleProps) {
+  return (
+    <button
+      aria-controls="privacy-detail"
+      aria-expanded={open}
+      // Negative margin so a finger-sized target does not push the arrow off the text's
+      // own first line.
+      className="-m-1.5 shrink-0 self-start rounded-full p-1.5 text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
+      onClick={onClick}
+      type="button"
+    >
+      <span className="sr-only">{label}</span>
+      <ChevronDown
+        aria-hidden="true"
+        className={`size-4 transition-transform motion-reduce:transition-none ${open ? "rotate-180" : ""}`}
+      />
+    </button>
+  );
+}
 
 type StartScreenProps = {
   onError: () => void;
@@ -40,6 +80,7 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
   const [birthYear, setBirthYear] = useState("");
   const [gender, setGender] = useState<Gender | null>(null);
   const [genderSlides, setGenderSlides] = useState(false);
+  const [noticeOpen, setNoticeOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const valid = isValidBirthYear(birthYear);
   const invalid = birthYear.length > 0 && !valid;
@@ -74,146 +115,206 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-card px-6 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-7">
       <VisitPing page="participant" />
-      <div className="flex-1">
+      <div className="flex shrink-0 flex-col">
         <p className="text-[15px] font-bold text-primary">유스플랜AI</p>
         <h1 className="mt-3 text-[29px] leading-[1.28] font-bold tracking-[-0.035em]">
           2045년의 인천,
           <br />
           어떤 하루를 보내고 싶나요?
         </h1>
-        {/* Tighter leading than the rest of the screen: the notice below has to name
-            every collected item, and this is where that height comes from. */}
+        {/* Tighter leading than the rest of the screen: everything down to the start
+            button has to fit on one 390×844 screen, and this is where the height goes. */}
         <p className="mt-3 text-[16px] leading-6 text-muted-foreground">
-          AI와 대화하며 내가 바라는 2045년 인천의 일상과 필요한 변화를 정리해요.
-          들려주신 이야기는 인천을 계획할 때 청년의 관점을 반영하는 자료가 돼요.
+          AI와 대화하며 내가 바라는 2045년 인천의 일상을 상상해보세요. 들려주신
+          이야기는 인천 도시계획 과정에 청년의 관점으로 전달돼요.
         </p>
-        <p className="mt-3 text-[15px] leading-6 text-muted-foreground">
-          인천에 살거나, 학교나 직장이 인천이거나, 인천을 자주 찾는 청년이면
-          누구나 참여할 수 있어요.
+        {/* These boxes absorb two paragraphs, so they have to fit in the height those
+            paragraphs took: the start button below must not fold at 390×844. They read
+            in Incheon Blue rather than the form's grey, which would invite a tap they
+            do not answer. */}
+        <ul className="mt-5 grid grid-cols-3 gap-3.5">
+          {ENTRY_FACTS.map(({ Icon, text }) => (
+            <li
+              // The gap is wider than the padding the square is left with, so the
+              // air sits between icon and label instead of banding top and bottom.
+              className="flex aspect-square flex-col items-center justify-center gap-4 rounded-2xl bg-secondary px-[3px] text-center text-secondary-foreground"
+              key={text}
+            >
+              <Icon aria-hidden="true" className="size-8 shrink-0" />
+              {/* Korean breaks anywhere by default, which splits these labels
+                  mid-word in a box this narrow. */}
+              <span className="text-[15px] leading-[1.28] font-bold break-keep">
+                {text}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {/* Names the collector before the consent rather than inside it: someone asked for
+            their time and their answers should not have to open a disclosure to find out
+            who is asking. The notice stops short of it, so it is readable throughout. */}
+        <p className="mt-5 text-[13px] leading-5 break-keep text-muted-foreground">
+          {RESEARCHERS}. 문의{" "}
+          <a
+            className="underline underline-offset-2"
+            href={`mailto:${CONTACT_EMAIL}`}
+          >
+            {CONTACT_EMAIL}
+          </a>
         </p>
-        {/* The only place the duration is stated, so the interviewer never guesses it. */}
-        <p className="mt-3 text-[15px] font-semibold text-incheon-green">
-          인터뷰는 5~10분 정도 걸려요.
-        </p>
-        {/* A completion reward only works if it is known before starting, so it
-            joins the duration as the second fact about taking part. */}
-        {PRIZE_DRAW_OPEN && (
-          <p className="mt-1.5 text-[15px] font-semibold text-incheon-green">
-            끝까지 마치면 스타벅스 쿠폰 추첨에 응모할 수 있어요.
-          </p>
-        )}
       </div>
 
-      <form className="mt-6 shrink-0" onSubmit={submit}>
-        {/* The error shares the label's line so appearing and clearing costs no vertical space. */}
-        <div className="flex items-baseline justify-between gap-3">
-          <label
-            className="text-[14px] font-bold text-foreground"
-            htmlFor="birth-year"
-          >
+      <form className="flex shrink-0 grow flex-col pt-4" onSubmit={submit}>
+        {/* The notice is anchored to the bottom of this region and may grow to fill it, so
+            what limits its reach is the region's own top — set just under the line naming
+            the collector — rather than a measured height. */}
+        <div className="relative flex grow flex-col justify-end">
+          <label className="sr-only" htmlFor="birth-year">
             출생연도
           </label>
-          <p
-            id="birth-year-error"
-            className={`shrink-0 text-[12px] whitespace-nowrap text-muted-foreground ${invalid ? "visible" : "invisible"}`}
-          >
-            1997~2010년생이 참여할 수 있어요
-          </p>
-        </div>
-        <input
-          id="birth-year"
-          aria-describedby={invalid ? "birth-year-error" : undefined}
-          aria-invalid={invalid}
-          autoComplete="bday-year"
-          className="mt-2.5 h-14 w-full rounded-2xl bg-muted px-4 text-base font-semibold outline-none transition focus:ring-2 focus:ring-primary/20 aria-invalid:ring-2 aria-invalid:ring-incheon-gray/35 disabled:cursor-not-allowed"
-          disabled={pending}
-          inputMode="numeric"
-          maxLength={4}
-          onChange={(event) => {
-            if (/^\d{0,4}$/.test(event.target.value)) {
-              setBirthYear(event.target.value);
-            }
-          }}
-          placeholder="예: 2000"
-          value={birthYear}
-        />
-        <fieldset className="mt-1.5" disabled={pending}>
-          <legend className="sr-only">성별</legend>
-          {/* Same radius token as the input above, which at this height resolves to a pill. */}
-          <div className="relative h-8 w-full rounded-2xl bg-muted p-[2px]">
-            {/* Position and appearance are split so enabling the slide cannot cut the fade short. */}
-            <div
-              className={`absolute inset-y-[2px] left-[2px] w-[calc((100%_-_4px)/3)] ${
-                genderSlides
-                  ? "transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
-                  : ""
-              }`}
-              style={{
-                transform: `translateX(${Math.max(genderIndex, 0) * 100}%)`,
+          <div className="relative">
+            <input
+              id="birth-year"
+              aria-describedby={invalid ? "birth-year-error" : undefined}
+              aria-invalid={invalid}
+              autoComplete="bday-year"
+              className="h-14 w-full rounded-2xl bg-muted px-4 text-base font-semibold outline-none transition focus:ring-2 focus:ring-primary/20 aria-invalid:ring-2 aria-invalid:ring-incheon-gray/35 disabled:cursor-not-allowed"
+              disabled={pending}
+              inputMode="numeric"
+              maxLength={4}
+              onChange={(event) => {
+                if (/^\d{0,4}$/.test(event.target.value)) {
+                  setBirthYear(event.target.value);
+                }
               }}
+              placeholder="출생연도"
+              value={birthYear}
+            />
+            {/* Not a label for pointer purposes, so clicks fall through to the field. */}
+            <p
+              id="birth-year-error"
+              className={`pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-[12px] whitespace-nowrap text-muted-foreground ${invalid ? "visible" : "invisible"}`}
             >
+              1987~2010년생이 참여할 수 있어요
+            </p>
+          </div>
+          <fieldset className="mt-1.5" disabled={pending}>
+            <legend className="sr-only">성별</legend>
+            {/* Same radius token as the input above, which at this height resolves to a pill. */}
+            <div className="relative h-8 w-full rounded-2xl bg-muted p-[2px]">
+              {/* Position and appearance are split so enabling the slide cannot cut the fade short. */}
               <div
-                className={`size-full rounded-full bg-card shadow-[0_1px_3px_rgba(23,25,26,0.1)] transition-opacity duration-300 ease-out motion-reduce:transition-none ${
-                  genderIndex >= 0 ? "opacity-100" : "opacity-0"
+                className={`absolute inset-y-[2px] left-[2px] w-[calc((100%_-_4px)/3)] ${
+                  genderSlides
+                    ? "transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+                    : ""
                 }`}
-              />
-            </div>
-            <div className="relative flex h-full">
-              {GENDER_OPTIONS.map((option) => {
-                const checked = gender === option.value;
+                style={{
+                  transform: `translateX(${Math.max(genderIndex, 0) * 100}%)`,
+                }}
+              >
+                <div
+                  className={`size-full rounded-full bg-card shadow-[0_1px_3px_rgba(23,25,26,0.1)] transition-opacity duration-300 ease-out motion-reduce:transition-none ${
+                    genderIndex >= 0 ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+              </div>
+              <div className="relative flex h-full">
+                {GENDER_OPTIONS.map((option) => {
+                  const checked = gender === option.value;
 
-                return (
-                  // The label reaches past the rail so the bar can look thin while the thumb stays a full finger tall.
-                  <label
-                    className="-my-2 flex flex-1 cursor-pointer py-2 has-[:disabled]:cursor-not-allowed"
-                    key={option.value}
-                  >
-                    <input
-                      checked={checked}
-                      className="peer sr-only"
-                      name="gender"
-                      onChange={() => chooseGender(option.value)}
-                      type="radio"
-                      value={option.value}
-                    />
-                    <span
-                      className={`flex flex-1 items-center justify-center rounded-full text-[15px] transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 ${
-                        checked
-                          ? "font-bold text-primary"
-                          : "font-semibold text-muted-foreground"
-                      }`}
+                  return (
+                    // The label reaches past the rail so the bar can look thin while the thumb stays a full finger tall.
+                    <label
+                      className="-my-2 flex flex-1 cursor-pointer py-2 has-[:disabled]:cursor-not-allowed"
+                      key={option.value}
                     >
-                      {option.label}
-                    </span>
-                  </label>
-                );
-              })}
+                      <input
+                        checked={checked}
+                        className="peer sr-only"
+                        name="gender"
+                        onChange={() => chooseGender(option.value)}
+                        type="radio"
+                        value={option.value}
+                      />
+                      <span
+                        className={`flex flex-1 items-center justify-center rounded-full text-[15px] transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 ${
+                          checked
+                            ? "font-bold text-primary"
+                            : "font-semibold text-muted-foreground"
+                        }`}
+                      >
+                        {option.label}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          </fieldset>
+
+          {/* Holds the closed notice's height in the flow while the notice itself is taken
+              out of it. Copying the row is what makes the reservation exact at any width,
+              including one where the sentence wraps. */}
+          <div aria-hidden="true" className="invisible mt-3 rounded-2xl p-3">
+            <div className="flex gap-2">
+              <p className="min-w-0 flex-1 text-[14px] leading-6 font-semibold">
+                {CONSENT_LINE}
+              </p>
+              <span className="size-4 shrink-0" />
             </div>
           </div>
-        </fieldset>
-        <div className="mt-4 rounded-2xl bg-muted/60 p-3.5">
-          {/* Every collected item has to be named here, so the block splits into
-              what is taken and what happens to it rather than running on. */}
-          <div className="space-y-2 text-[12px] leading-5 text-muted-foreground">
-            <p>
-              유스플랜AI는 출생연도, 성별, 인터뷰 대화 내용, 대화 중 말한
-              별명·거주 지역·꿈 또는 직업, 만족도 답변 2개, 기기 식별 토큰을
-              받아요. 이 토큰은 같은 기기에서 몇 번 참여했는지만 세고, 참여를
-              막거나 누구인지 알아내지 않아요. 화면을 열면 뒷자리를 가린 IP
-              주소와 기기·브라우저도 남아요.
-            </p>
-            <p>
-              대화 내용은 앤트로픽과 구글의 AI로 처리해요. 받은 내용은 2045년
-              인천도시기본계획에 담을 청년 의견을 모으고 분석하는 데만 쓰고,
-              정리한 결과는 인천광역시에 전달해요. 2026년 12월 31일까지 보관하고
-              지워요.
-            </p>
+
+          {/* The notice itself: one box, bottom pinned where the closed one sits, growing
+              upward over the fields as its text unfolds. Card white under the translucent
+              grey keeps it opaque, so what it covers does not read through it. */}
+          <div className="absolute inset-x-0 bottom-0 flex max-h-full flex-col rounded-2xl bg-card">
+            <div className="flex min-h-0 flex-col rounded-2xl bg-muted/60 p-3">
+              <div
+                className={`grid min-h-0 transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${noticeOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+                id="privacy-detail"
+                inert={!noticeOpen}
+              >
+                <div className="flex min-h-0 flex-col overflow-hidden">
+                  <div className="min-h-0 overflow-y-auto">
+                    {/* Every collected item has to be named here (PLAN 8). One paragraph
+                        rather than two, and it scrolls if the screen is too short. */}
+                    <p className="text-[12px] leading-5 text-muted-foreground">
+                      유스플랜AI는 출생연도, 성별, 인터뷰 대화 내용, 대화 중
+                      말한 별명·거주 지역·꿈 또는 직업, 만족도 답변 2개, 기기
+                      식별 토큰, IP주소, 기기·브라우저 정보를 수집합니다. 기기
+                      식별 토큰과 IP주소는 중복 참여를 제한하는 용도로만
+                      활용합니다. 대화 내용은 Anthropic과 Google의 AI로
+                      처리합니다. 인터뷰 내용은 2045년 인천도시기본계획에 담을
+                      청년 의견을 모으고 분석하는 데만 쓰며, 정리한 결과는
+                      인천광역시에 전달합니다. 자료는 2026년 12월 31일까지
+                      보관하고 폐기합니다.
+                    </p>
+                  </div>
+                  {/* Keeps a line cut off by the scroll from sitting flush against
+                      the consent sentence. It lives inside the fold so the closed
+                      notice does not carry it and creep into the gender bar. */}
+                  <div aria-hidden="true" className="h-3 shrink-0" />
+                </div>
+              </div>
+              {/* The press is the consent, so this line carries the checkbox label's
+                  weight, and the arrow rides its row: one arrow, in one place, whichever
+                  state the notice is in. */}
+              <div className="flex shrink-0 gap-2">
+                <p className="min-w-0 flex-1 text-[14px] leading-6 font-semibold text-foreground">
+                  {CONSENT_LINE}
+                </p>
+                <NoticeToggle
+                  label={
+                    noticeOpen
+                      ? "개인정보 수집·이용 안내 접기"
+                      : "개인정보 수집·이용 안내 자세히 보기"
+                  }
+                  onClick={() => setNoticeOpen((open) => !open)}
+                  open={noticeOpen}
+                />
+              </div>
+            </div>
           </div>
-          {/* The press is the consent now, so it carries the checkbox label's weight
-              and closes the notice instead of trailing the button as a footnote. */}
-          <p className="mt-3 text-[14px] leading-6 font-semibold text-foreground">
-            버튼을 누르면 개인정보 수집·이용에 동의하게 돼요.
-          </p>
         </div>
         <Button
           className="mt-4 h-14 w-full rounded-2xl text-base font-bold"

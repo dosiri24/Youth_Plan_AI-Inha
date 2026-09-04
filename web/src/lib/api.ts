@@ -357,6 +357,13 @@ export async function generateResult(
   return (await response.json()) as ResultResponse;
 }
 
+/** The transcript leaves the session only when the participant asks for it (PLAN 9.2). */
+export async function reportFailure(sessionId: string): Promise<void> {
+  await request(`/api/sessions/${sessionId}/failure-report`, {
+    method: "POST",
+  });
+}
+
 /** Sentence positions keep revision input separate from fixed report text. */
 export async function reviseResult(
   sessionId: string,
@@ -393,6 +400,20 @@ export async function submitResult(
   const data = (await response.json()) as { submission_id: string };
 
   return data.submission_id;
+}
+
+/** Prize contact details take their own route after a completed submission exists. */
+export async function enterPrize(
+  submissionId: string,
+  phone: string,
+): Promise<void> {
+  await request("/api/prize-entries", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ submission_id: submissionId, phone }),
+  });
 }
 
 export type Evidence = {

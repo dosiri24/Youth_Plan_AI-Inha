@@ -1,4 +1,6 @@
+import hashlib
 import secrets
+import traceback
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -38,7 +40,7 @@ class VisitRequest(BaseModel):
 class CreateSessionRequest(BaseModel):
     """Represent the mock-auth session creation request."""
 
-    birth_year: Annotated[int, Field(strict=True, ge=1997, le=2010)]
+    birth_year: Annotated[int, Field(strict=True, ge=1987, le=2010)]
     gender: Literal["male", "female", "other"]
     device_token: Annotated[str, Field(strict=True, min_length=1, max_length=64)]
 
@@ -85,6 +87,23 @@ class SubmitRequest(BaseModel):
 
     ease: Annotated[int, Field(strict=True, ge=1, le=5)] | None = None
     accuracy: Annotated[int, Field(strict=True, ge=1, le=5)] | None = None
+
+
+class PrizeEntryRequest(BaseModel):
+    """Accept one optional draw contact only after its submission exists."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    submission_id: Annotated[
+        str,
+        Field(
+            pattern=(
+                r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+                r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            )
+        ),
+    ]
+    phone: Annotated[str, Field(pattern=r"^010\d{8}$")]
 
 
 class DeleteSubmissionRequest(BaseModel):
@@ -238,20 +257,33 @@ async def generate_result(session_id: str, request: Request) -> dict[str, object
             )
             personal_report = report.assemble(current, type_result, draft)
         except Exception as error:
+            reason = type(error).__name__
+            message_count = len(current["messages"])
+            turn_count = max(
+                (message["turn"] for message in current["messages"]),
+                default=0,
+            )
+            payload_length = diagnostics.payload_length
+            upstream_status_code = getattr(error, "code", None)
             fields: dict[str, object] = {
                 "session_id": session_id,
-                "reason": type(error).__name__,
-                "message_count": len(current["messages"]),
-                "turn_count": max(
-                    (message["turn"] for message in current["messages"]),
-                    default=0,
-                ),
-                "payload_length": diagnostics.payload_length,
+                "reason": reason,
+                "message_count": message_count,
+                "turn_count": turn_count,
+                "payload_length": payload_length,
             }
-            upstream_status_code = getattr(error, "code", None)
             if upstream_status_code is not None:
                 fields["upstream_status_code"] = upstream_status_code
             log_event("result_failed", **fields)
+            current["failure"] = {
+                "reason": reason,
+                "message": str(error),
+                "traceback": traceback.format_exc(),
+                "upstream_status_code": upstream_status_code,
+                "message_count": message_count,
+                "turn_count": turn_count,
+                "payload_length": payload_length,
+            }
             raise
     current["type_result"] = type_result
     current["report"] = personal_report
@@ -269,6 +301,31 @@ async def generate_result(session_id: str, request: Request) -> dict[str, object
         "type_result": report.slim_type_result(type_result),
         "report": report.slim_report(personal_report),
     }
+
+
+@app.post(
+    "/api/sessions/{session_id}/failure-report",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def report_failure(session_id: str) -> Response:
+    """Persist one participant-approved result-generation failure report."""
+    current = _find_session(session_id)
+    failure = current["failure"]
+    if failure is None:
+        raise HTTPException(status.HTTP_409_CONFLICT)
+    store.get_failure_store().record(
+        {
+            "session_id": session_id,
+            "reported_at": datetime.now(UTC),
+            "birth_year": current["birth_year"],
+            "gender": current["gender"],
+            "raw_transcript": current["messages"],
+            "evidence_log": current["evidence_log"],
+            "failure": failure,
+        }
+    )
+    log_event("failure_reported", session_id=session_id, reason=failure["reason"])
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.post("/api/sessions/{session_id}/result/revise")
@@ -332,6 +389,25 @@ def submit_result(
     log_event("submitted", session_id=session_id, submission_id=submission_id)
     _record_activity("submission", request)
     return SubmissionResponse(submission_id=submission_id)
+
+
+@app.post("/api/prize-entries", status_code=status.HTTP_204_NO_CONTENT)
+def enter_prize(prize_entry: PrizeEntryRequest) -> Response:
+    """Store a deduplicated phone number apart from the policy submission."""
+    if store.get_store().get(str(prize_entry.submission_id)) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+    entry_id = hashlib.sha256(f"youth-plan-prize:{prize_entry.phone}".encode()).hexdigest()
+    store.get_prize_entry_store().save(
+        entry_id,
+        {
+            "phone": prize_entry.phone,
+            "entered_at": datetime.now(UTC),
+            "consent_notice_version": "2026-09-03",
+        },
+    )
+    log_event("prize_entered")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.get("/api/admin/submissions")

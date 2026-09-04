@@ -258,11 +258,15 @@ export default function SubmissionsList() {
                 }
                 aria-invalid={message !== null}
                 autoComplete="off"
-                className="mt-2 h-12 w-full rounded-xl bg-muted px-4 text-[15px] font-semibold tracking-[0.35em] outline-none transition focus:ring-2 focus:ring-primary/20 aria-invalid:ring-2 aria-invalid:ring-incheon-gray/35 disabled:cursor-not-allowed"
+                // The code is a long random string, not digits: a numeric keypad cannot
+                // type it, and autocorrect would change it without saying so.
+                autoCapitalize="off"
+                autoCorrect="off"
+                className="mt-2 h-12 w-full rounded-xl bg-muted px-4 text-[15px] font-semibold tracking-[0.02em] outline-none transition focus:ring-2 focus:ring-primary/20 aria-invalid:ring-2 aria-invalid:ring-incheon-gray/35 disabled:cursor-not-allowed"
                 disabled={deleting}
                 id="delete-access-code"
-                inputMode="numeric"
                 onChange={(event) => setCode(event.target.value)}
+                spellCheck={false}
                 value={code}
               />
               <p

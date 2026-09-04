@@ -23,6 +23,9 @@ SettlementValue = Literal["인천", "타지", SETTLEMENT_ABSENT]
 # Gemini caps total response-schema enums, so this stays text to leave room for other fields.
 PLACE_KINDS = ("거주지", "활동 장소", "문제 장소")
 PlaceKind = Literal[*PLACE_KINDS]
+MAX_DEMANDS_PER_AXIS = 3
+MAX_QUOTES_PER_DEMAND = 2
+MAX_PLACES_PER_DEMAND = 3
 Sentence = Annotated[str, Field(min_length=1)]
 TokenUsage = dict[str, int] | None
 # An axis with no evidence has no explanation, so the code states that instead of the model.
@@ -66,7 +69,7 @@ class StructuredTopDemand(StrictModel):
 
     title: str
     reason: list[Sentence]
-    quotes: Annotated[list[StructuredQuote], Field(max_length=2)]
+    quotes: list[StructuredQuote]
     demand_id: str
 
 
@@ -85,8 +88,8 @@ class StructuredDemand(StrictModel):
     id: Annotated[str, Field(min_length=1)]
     title: Annotated[str, Field(min_length=1)]
     description: Annotated[list[Sentence], Field(min_length=1)]
-    quotes: Annotated[list[StructuredQuote], Field(min_length=1, max_length=2)]
-    places: Annotated[list[StructuredPlace], Field(max_length=3)]
+    quotes: Annotated[list[StructuredQuote], Field(min_length=1)]
+    places: list[StructuredPlace]
 
 
 class StructuredAxisReason(StrictModel):
@@ -98,10 +101,10 @@ class StructuredAxisReason(StrictModel):
 
 
 class StructuredAxis(StrictModel):
-    """Prevent a generated axis from over-expanding while allowing an unevidenced one."""
+    """Keep generated demands grouped under one contracted axis."""
 
     axis: AxisName
-    demands: Annotated[list[StructuredDemand], Field(max_length=3)]
+    demands: list[StructuredDemand]
 
     @model_validator(mode="after")
     def require_sequential_ids(self) -> Self:
@@ -118,8 +121,8 @@ class StructuredReport(StrictModel):
     self_info: StructuredSelfInfo
     settlement: StructuredSettlement
     summary: Annotated[list[Sentence], Field(min_length=1)]
-    axis_reasons: Annotated[list[StructuredAxisReason], Field(min_length=4, max_length=4)]
-    axis_demands: Annotated[list[StructuredAxis], Field(min_length=4, max_length=4)]
+    axis_reasons: Annotated[list[StructuredAxisReason], Field(min_length=4)]
+    axis_demands: Annotated[list[StructuredAxis], Field(min_length=4)]
     # Declared after axis_demands so the model has already emitted the ids demand_id refers to.
     top_demand: StructuredTopDemand
     participation_notes: list[StructuredQuote]
@@ -138,7 +141,7 @@ class RevisedDemands(StrictModel):
     """Accept one regenerated summary and complete ordered demand replacement."""
 
     summary: Annotated[list[Sentence], Field(min_length=1)]
-    axis_demands: Annotated[list[StructuredAxis], Field(min_length=4, max_length=4)]
+    axis_demands: Annotated[list[StructuredAxis], Field(min_length=4)]
 
     @model_validator(mode="after")
     def require_axis_order(self) -> Self:
@@ -450,14 +453,14 @@ def _check_quotes(
     dropped_quote_count = 0
     dropped_demand_count = 0
     dropped_place_count = 0
+    truncated_count = 0
     demand_id_map: dict[str, str] = {}
 
     for axis in value["axis_demands"]:
         if checked_axes is not None and axis["axis"] not in checked_axes:
             continue
-        demands = []
+        valid_demands = []
         for demand in axis["demands"]:
-            old_id = demand["id"]
             quotes = [quote for quote in demand["quotes"] if quote_matches(quote, user_messages)]
             places = [
                 place
@@ -471,6 +474,16 @@ def _check_quotes(
                 continue
             demand["quotes"] = quotes
             demand["places"] = places
+            valid_demands.append(demand)
+
+        truncated_count += max(0, len(valid_demands) - MAX_DEMANDS_PER_AXIS)
+        demands = []
+        for demand in valid_demands[:MAX_DEMANDS_PER_AXIS]:
+            old_id = demand["id"]
+            truncated_count += max(0, len(demand["quotes"]) - MAX_QUOTES_PER_DEMAND)
+            truncated_count += max(0, len(demand["places"]) - MAX_PLACES_PER_DEMAND)
+            demand["quotes"] = demand["quotes"][:MAX_QUOTES_PER_DEMAND]
+            demand["places"] = demand["places"][:MAX_PLACES_PER_DEMAND]
             new_id = f"{axis['axis']}-D{len(demands) + 1}"
             demand["id"] = new_id
             demand_id_map[old_id] = new_id
@@ -483,9 +496,10 @@ def _check_quotes(
             quote for quote in top_demand["quotes"] if quote_matches(quote, user_messages)
         ]
         dropped_quote_count += len(top_demand["quotes"]) - len(top_quotes)
-        top_demand["quotes"] = top_quotes
+        truncated_count += max(0, len(top_quotes) - MAX_QUOTES_PER_DEMAND)
+        top_demand["quotes"] = top_quotes[:MAX_QUOTES_PER_DEMAND]
         top_demand["demand_id"] = demand_id_map.get(top_demand["demand_id"], "")
-        if top_demand["title"] and not top_quotes:
+        if top_demand["title"] and not top_demand["quotes"]:
             value["top_demand"] = {
                 "title": "",
                 "reason": [],
@@ -498,13 +512,14 @@ def _check_quotes(
         dropped_quote_count += len(value["participation_notes"]) - len(notes)
         value["participation_notes"] = notes
 
-    if dropped_quote_count or dropped_place_count:
+    if dropped_quote_count or dropped_place_count or truncated_count:
         log_event(
             "quote_check_dropped",
             session_id=current["session_id"],
             dropped_quote_count=dropped_quote_count,
             dropped_demand_count=dropped_demand_count,
             dropped_place_count=dropped_place_count,
+            truncated_count=truncated_count,
         )
     return type(structured).model_validate(value)
 

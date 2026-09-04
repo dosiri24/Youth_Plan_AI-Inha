@@ -31,6 +31,18 @@ class TranscriptMessage(TypedDict):
     text: str
 
 
+class Failure(TypedDict):
+    """Define the last result-generation failure."""
+
+    reason: str
+    message: str
+    traceback: str
+    upstream_status_code: int | None
+    message_count: int
+    turn_count: int
+    payload_length: int
+
+
 class Session(TypedDict):
     """Define the current in-memory session shape."""
 
@@ -47,6 +59,7 @@ class Session(TypedDict):
     status: Literal["active", "ended", "result_ready", "submitted"]
     type_result: TypeResult | None
     report: PersonalReport | None
+    failure: Failure | None
     revision_count: int
     created_at: datetime
 
@@ -75,6 +88,7 @@ def create_session(
         "status": "active",
         "type_result": None,
         "report": None,
+        "failure": None,
         "revision_count": 0,
         "created_at": datetime.now(UTC),
     }

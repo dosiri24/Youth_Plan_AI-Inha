@@ -238,7 +238,9 @@ export function QuoteLayer({
                     <p className={styles.demand}>{quote.demand_title}</p>
                     <div className={styles.meta}>
                       <span className={styles.axis}>
-                        {quote.axis ? AXIS_INFO[quote.axis].title : "축 밖의 요구"}
+                        {quote.axis
+                          ? AXIS_INFO[quote.axis].title
+                          : "축 밖의 요구"}
                       </span>
                       {quote.axis && (
                         <span className={styles.badge}>

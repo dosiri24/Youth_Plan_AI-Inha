@@ -20,14 +20,8 @@ function StoryOverview({ report }: ReportOverviewProps) {
 
   return (
     <section aria-labelledby="story-title">
-      <p className="text-[13px] font-bold text-incheon-green">
-        내가 들려준 이야기
-      </p>
-      <h2
-        id="story-title"
-        className="mt-2 text-[24px] font-bold tracking-[-0.03em]"
-      >
-        {info.nickname}님의 이야기
+      <h2 id="story-title" className="text-[24px] font-bold tracking-[-0.03em]">
+        {info.nickname}님의 2045년
       </h2>
 
       <div className="mt-6 rounded-[24px] bg-card p-5">
@@ -94,7 +88,7 @@ function DemandBlock({ demand }: { demand: Demand }) {
             ))}
           </ul>
           <p className="mt-4 text-[12px] font-bold text-muted-foreground">
-            정리한 내용
+            AI가 정리한 요구
           </p>
         </>
       )}
@@ -121,9 +115,9 @@ function DemandOverview({ report }: ReportOverviewProps) {
         <div>
           <h2
             id="demands-title"
-            className="mt-2 text-[24px] font-bold tracking-[-0.03em]"
+            className="text-[24px] font-bold tracking-[-0.03em]"
           >
-            인천에 바라는 변화를 모았어요
+            인천에 바라는 변화를 AI가 정리해 보았어요
           </h2>
         </div>
         {report.meta.revision_count > 0 && (
@@ -132,9 +126,6 @@ function DemandOverview({ report }: ReportOverviewProps) {
           </span>
         )}
       </div>
-      <p className="mt-3 text-[15px] leading-6 text-muted-foreground">
-        내가 한 말을 먼저 보여주고, 그 아래에 정리한 내용을 담았어요.
-      </p>
 
       <div className="mt-6 space-y-4">
         {report.axis_demands.map((axisDemand) => (
