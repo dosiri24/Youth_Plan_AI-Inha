@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import secrets
 import traceback
@@ -14,7 +15,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.base import RequestResponseEndpoint
 
-from app import analysis, dev, interview, prompts, report, scoring, session, store
+from app import analysis, dev, interview, prompts, report, scoring, session, store, tagging
+from app.axes import AXIS_NAMES
 from app.config import get_settings
 from app.logging import configure_logging, log_event
 
@@ -237,7 +239,7 @@ def undo_last_turn(session_id: str) -> Response:
 
 @app.post("/api/sessions/{session_id}/result")
 async def generate_result(session_id: str, request: Request) -> dict[str, object]:
-    """Keep deterministic scoring independent from report-track latency."""
+    """Complete empty-axis judgements before scoring and report generation."""
     current = _find_session(session_id)
     if current["status"] != "ended":
         raise HTTPException(status.HTTP_409_CONFLICT)
@@ -249,7 +251,17 @@ async def generate_result(session_id: str, request: Request) -> dict[str, object
     else:
         diagnostics = report.DraftDiagnostics()
         try:
-            type_result = scoring.score_type(current["evidence_log"], session_id)
+            evidenced_axes = {item["axis"] for item in current["evidence_log"]}
+            empty_axes = [axis for axis in AXIS_NAMES if axis not in evidenced_axes]
+            judgements = await asyncio.gather(
+                *(tagging.nearest(current["messages"], axis, session_id) for axis in empty_axes)
+            )
+            nearest = {
+                axis: judgement
+                for axis, judgement in zip(empty_axes, judgements, strict=True)
+                if judgement is not None
+            }
+            type_result = scoring.score_type(current["evidence_log"], session_id, nearest)
             draft = await report.generate_draft(
                 current,
                 type_result,

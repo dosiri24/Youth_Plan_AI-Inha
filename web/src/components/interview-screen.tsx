@@ -527,7 +527,7 @@ export function InterviewScreen({
             {status === "ended" && (
               <section className="rounded-[24px] bg-card p-5">
                 <p className="text-[13px] font-bold text-incheon-green">
-                  인터뷰 완료
+                  대화 완료
                 </p>
                 <h2 className="mt-2 text-[21px] font-bold tracking-[-0.02em]">
                   이야기를 모두 나눴어요

@@ -606,7 +606,11 @@ def _axis_reasons(
         {
             "axis": item.axis,
             "letter": scored[item.axis]["letter"],
-            "reason": (EMPTY_AXIS_REASON if scored[item.axis]["empty_axis"] else item.reason),
+            "reason": (
+                EMPTY_AXIS_REASON
+                if scored[item.axis]["empty_axis"] and scored[item.axis]["nearest_quote"] is None
+                else item.reason
+            ),
         }
         for item in structured.axis_reasons
     ]
@@ -642,6 +646,7 @@ def slim_type_result(type_result: TypeResult) -> dict[str, object]:
                 "letter": axis["letter"],
                 "strength": axis["strength"],
                 "empty_axis": axis["empty_axis"],
+                "nearest_quote": axis.get("nearest_quote"),
             }
             for axis in type_result["axes"]
         ],

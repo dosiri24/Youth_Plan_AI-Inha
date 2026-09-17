@@ -8,3 +8,6 @@ export const RESEARCHERS =
   "인하대학교 강채연(행정학과)·이태수(공간정보공학과)·지수현(행정학과)";
 
 export const CONTACT_EMAIL = "dosiri24@inha.edu";
+
+/** Hides the collector line during the anonymous poster vote; the address names the school too, so it goes with it. Set false to restore. */
+export const HIDE_TEAM = true;

@@ -101,7 +101,10 @@ function toBarRow(result: AxisResult): BarRow {
     lose: opposite.badge,
     // An unevidenced axis sits at its default pole, so a percentage here would
     // present a fallback as a measurement.
-    strength: result.empty_axis ? null : getDisplayStrength(result.strength),
+    strength:
+      result.empty_axis && !result.nearest_quote
+        ? null
+        : getDisplayStrength(result.strength),
   };
 }
 

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { VisitPing } from "@/components/visit-ping";
 import { createSession, type Gender } from "@/lib/api";
 import { readDeviceToken } from "@/lib/device-token";
-import { CONTACT_EMAIL, RESEARCHERS } from "@/lib/team";
+import { CONTACT_EMAIL, HIDE_TEAM, RESEARCHERS } from "@/lib/team";
 
 type Screen =
   | { name: "start" }
@@ -152,15 +152,17 @@ function StartScreen({ onError, onStart }: StartScreenProps) {
         {/* Names the collector before the consent rather than inside it: someone asked for
             their time and their answers should not have to open a disclosure to find out
             who is asking. The notice stops short of it, so it is readable throughout. */}
-        <p className="mt-5 text-[13px] leading-5 break-keep text-muted-foreground">
-          {RESEARCHERS}. 문의{" "}
-          <a
-            className="underline underline-offset-2"
-            href={`mailto:${CONTACT_EMAIL}`}
-          >
-            {CONTACT_EMAIL}
-          </a>
-        </p>
+        {!HIDE_TEAM && (
+          <p className="mt-5 text-[13px] leading-5 break-keep text-muted-foreground">
+            {RESEARCHERS}. 문의{" "}
+            <a
+              className="underline underline-offset-2"
+              href={`mailto:${CONTACT_EMAIL}`}
+            >
+              {CONTACT_EMAIL}
+            </a>
+          </p>
+        )}
       </div>
 
       <form className="flex shrink-0 grow flex-col pt-4" onSubmit={submit}>

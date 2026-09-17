@@ -102,9 +102,6 @@ EVALUATIVE_WORDS = (
 # Endings that mark a generated restatement of the participant's last utterance.
 RESTATEMENT_ENDINGS = ("시군요", "셨군요", "이시네요", "는군요", "군요", "네요", "말씀이시")
 
-# Surface forms that demand an answer, which must not share a turn with termination.
-ANSWER_DEMANDS = ("?", "세요", "십시오", "을까요", "ㄹ까요", "나요", "주시겠", "가요", "인가요")
-
 # Marks of the final-remarks question every participant must get before the interview closes.
 LAST_CHANCE_MARKS = ("덧붙이", "빠뜨린", "빠진", "더 하고 싶은", "남기고 싶은", "더 전하고 싶은")
 
@@ -125,9 +122,6 @@ REFUSAL_MARKS = (
     "없습니다",
     "패스",
 )
-
-# A participant may leave at any point, and the interviewer must be allowed to close there.
-STOP_MARKS = ("그만", "종료", "끝낼", "끝내", "여기까지", "안 할래", "안할래")
 
 # Particles and suffixes stripped to compare an interviewer word with a participant word.
 PARTICLES = (

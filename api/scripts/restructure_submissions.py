@@ -63,6 +63,7 @@ async def rebuild(submission_id: str, submission_store: store.SubmissionStore) -
         "messages": revive(document["raw_transcript"]),
         "evidence_log": document["evidence_log"],
         "axis_hints": {},
+        "closing_hint_sent": False,
         "malicious_count": 0,
         "status": "ended",
         "type_result": None,

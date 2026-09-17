@@ -14,7 +14,15 @@ class AxisResult(TypedDict):
     scores: dict[str, int]
     evidence_count: int
     empty_axis: bool
+    nearest_quote: str | None
     evidence: list[Evidence]
+
+
+class Nearest(TypedDict):
+    """Define one validated nearest judgement for an empty axis."""
+
+    pole: str
+    text: str
 
 
 class TypeResult(TypedDict):
@@ -24,10 +32,15 @@ class TypeResult(TypedDict):
     axes: list[AxisResult]
 
 
-def score_type(evidence: list[Evidence], session_id: str) -> TypeResult:
+def score_type(
+    evidence: list[Evidence],
+    session_id: str,
+    nearest: dict[str, Nearest] | None = None,
+) -> TypeResult:
     """Score all axes from validated evidence without an LLM call."""
+    nearest = nearest or {}
     axes = [
-        _score_axis(axis, poles, default, evidence, session_id)
+        _score_axis(axis, poles, default, evidence, session_id, nearest.get(axis))
         for axis, poles, default in SCORING_AXES
     ]
     return {"code": "".join(result["letter"] for result in axes), "axes": axes}
@@ -39,6 +52,7 @@ def _score_axis(
     default: str,
     evidence: list[Evidence],
     session_id: str,
+    nearest: Nearest | None,
 ) -> AxisResult:
     """Apply weight, tie-break, and strength rules to one axis."""
     axis_evidence = [item for item in evidence if item["axis"] == axis]
@@ -46,16 +60,17 @@ def _score_axis(
         pole: sum(item["weight"] for item in axis_evidence if item["pole"] == pole)
         for pole in poles
     }
-    # A default letter at 51 and a near-tie at 51 print the same, so the record separates them.
+    # A filled letter at 51 and a near-tie at 51 print the same, so the record separates them.
     if not axis_evidence:
         log_event("empty_axis", session_id=session_id, axis=axis)
         return {
             "axis": axis,
-            "letter": default,
+            "letter": nearest["pole"] if nearest else default,
             "strength": 51,
             "scores": scores,
             "evidence_count": 0,
             "empty_axis": True,
+            "nearest_quote": nearest["text"] if nearest else None,
             "evidence": axis_evidence,
         }
 
@@ -69,6 +84,7 @@ def _score_axis(
         "scores": scores,
         "evidence_count": len(axis_evidence),
         "empty_axis": False,
+        "nearest_quote": None,
         "evidence": axis_evidence,
     }
 

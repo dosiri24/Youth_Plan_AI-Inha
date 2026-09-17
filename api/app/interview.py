@@ -8,11 +8,7 @@ from google.genai import types
 from app import claude, gemini, knowledge, prompts, session, tagging
 from app.axes import AXIS_NAMES, Evidence
 from app.config import Settings, get_settings
-from app.lexicon import (
-    ANSWER_DEMANDS,
-    STOP_MARKS,
-    WH_WORDS,
-)
+from app.lexicon import WH_WORDS
 from app.logging import log_event
 from app.trailer import TrailerParser
 
@@ -114,6 +110,12 @@ async def _run(
             )
             return
 
+        log_event(
+            "interviewer_text_finished",
+            session_id=current["session_id"],
+            token_usage=token_usage,
+            turn=turn,
+        )
         evidence = (
             await _collect_scoring(scoring_task, current["session_id"], turn)
             if scoring_task is not None
@@ -121,9 +123,7 @@ async def _run(
         )
         _save_turn(current, turn, user_text, assistant_text, evidence)
 
-        ended = result.ended and _may_end(mode, user_text, assistant_text)
-        if result.ended and not ended:
-            log_event("termination_withheld", session_id=current["session_id"], turn=turn)
+        ended = result.ended
         if ended:
             current["status"] = "ended"
         log_event(
@@ -165,6 +165,8 @@ def _pacing(
     """Choose one pacing mode and any uncovered-axis guidance for this turn."""
     covered = {item["axis"] for item in current["evidence_log"]}
     uncovered = [axis for axis in AXIS_NAMES if axis not in covered]
+    hints = current["axis_hints"]
+    axis_order = {axis: index for index, axis in enumerate(AXIS_NAMES)}
     extension_limit = settings.interview_wrapup_turn + settings.interview_max_extra_turns
     if turn < settings.interview_wrapup_turn:
         mode: prompts.PacingMode = "continue"
@@ -173,9 +175,10 @@ def _pacing(
     else:
         mode = "closing"
     if mode == "closing":
-        if not uncovered:
+        if not uncovered or current["closing_hint_sent"]:
             return mode, None, False
-        axis = uncovered[0]
+        current["closing_hint_sent"] = True
+        axis = min(uncovered, key=lambda a: (len(hints.get(a, [])), axis_order[a]))
         log_event(
             "axis_hint",
             session_id=current["session_id"],
@@ -186,40 +189,24 @@ def _pacing(
         )
         return mode, axis, False
 
-    if mode == "continue" and turn < settings.interview_hint_turn:
+    if turn < settings.interview_hint_turn:
         return mode, None, False
-
-    axis_order = {axis: index for index, axis in enumerate(AXIS_NAMES)}
-    ordered = sorted(
-        uncovered,
-        key=lambda axis: (len(current["axis_hints"].get(axis, [])), axis_order[axis]),
-    )
-    eligible = []
-    for axis in ordered:
-        attempts = current["axis_hints"].get(axis, [])
-        if mode == "continue" and len(attempts) >= 2:
-            continue
-        # Tagging sees the prompted answer next turn, so wait before retrying.
-        if attempts and attempts[-1] > turn - 2:
-            continue
-        eligible.append(axis)
-
+    # Tagging sees the prompted answer only on the next turn, so the same axis waits one turn.
+    eligible = [axis for axis in uncovered if not hints.get(axis) or hints[axis][-1] <= turn - 2]
     if mode == "extend":
-        deferred_axis = eligible[0] if eligible else ordered[0]
         log_event(
             "wrapup_deferred",
             session_id=current["session_id"],
             turn=turn,
-            axis=deferred_axis,
+            axis=eligible[0] if eligible else uncovered[0],
         )
     if not eligible:
         return mode, None, False
 
-    axis = eligible[0]
-    attempts = current["axis_hints"].get(axis, [])
+    axis = min(eligible, key=lambda a: (len(hints.get(a, [])), axis_order[a]))
+    attempts = hints.setdefault(axis, [])
     retry = bool(attempts)
     attempts.append(turn)
-    current["axis_hints"][axis] = attempts
     log_event(
         "axis_hint",
         session_id=current["session_id"],
@@ -408,22 +395,6 @@ def _save_turn(
         return
     session.save_turn(current, turn, user_text, assistant_text)
     current["evidence_log"].extend(evidence)
-
-
-def _may_end(
-    mode: prompts.PacingMode,
-    user_text: str | None,
-    assistant_text: str,
-) -> bool:
-    """Decide whether this session has earned the right to close on this turn."""
-    if user_text is not None and _matches(user_text, STOP_MARKS):
-        return True
-    return mode == "closing" and not _matches(assistant_text, ANSWER_DEMANDS)
-
-
-def _matches(text: str, marks: tuple[str, ...]) -> bool:
-    """Report whether any listed surface form appears in one utterance."""
-    return any(mark in text for mark in marks)
 
 
 def _question_shape(assistant_text: str) -> dict[str, int | bool]:

@@ -65,15 +65,16 @@ function TypeResultCard({ axis }: { axis: AxisResultFull }) {
             {getPoleLabel(axis.axis, axis.letter)}
           </h3>
         </div>
-        {/* An empty axis shows no number at all; the notice below says why. */}
-        {!axis.empty_axis && (
+        {/* An empty axis shows no number at all; the notice below says why. A
+            nearest-judged axis is presented like a scored one. */}
+        {(!axis.empty_axis || axis.nearest_quote) && (
           <span className="shrink-0 text-[15px] font-bold text-primary">
             {getDisplayStrength(axis.strength)}%
           </span>
         )}
       </div>
 
-      {axis.empty_axis && (
+      {axis.empty_axis && !axis.nearest_quote && (
         <p className="mt-3 rounded-xl bg-muted px-3.5 py-2.5 text-[12px] leading-5 text-muted-foreground">
           <span className="font-bold text-incheon-gray">증거 0건</span> · 이
           축을 판단할 발화가 없어 집계에서 제외됩니다.
@@ -100,7 +101,16 @@ function TypeResultCard({ axis }: { axis: AxisResultFull }) {
         ))}
       </dl>
 
-      {axis.evidence.length === 0 ? (
+      {axis.evidence.length === 0 && axis.nearest_quote ? (
+        <ul className="mt-4 space-y-2">
+          <li className="rounded-xl bg-muted px-3.5 py-2.5 text-[13px] leading-6">
+            <span className="mr-2 font-mono text-[11px] font-bold text-primary">
+              {getPoleBadge(axis.axis, axis.letter)}
+            </span>
+            {axis.nearest_quote}
+          </li>
+        </ul>
+      ) : axis.evidence.length === 0 ? (
         <p className="mt-4 text-[13px] text-muted-foreground">
           증거가 없어 기본 극으로 판정했습니다.
         </p>

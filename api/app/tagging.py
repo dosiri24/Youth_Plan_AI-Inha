@@ -8,11 +8,12 @@ from typing import Annotated, Literal
 from google.genai import errors, types
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
-from app import gemini, session
+from app import gemini, report, session
 from app.axes import AXIS_NAMES, AXIS_POLES, EVIDENCE_WEIGHTS, SCORING_AXES, Evidence
 from app.config import get_settings
 from app.logging import log_event
-from app.prompts import load_scoring_instruction
+from app.prompts import load_nearest_instruction, load_scoring_instruction
+from app.scoring import Nearest
 
 AxisName = Literal[*AXIS_NAMES]
 PoleName = Literal[*tuple(pole for _axis, poles, _default in SCORING_AXES for pole in poles)]
@@ -47,6 +48,13 @@ class EvidenceResponse(RootModel[list[EvidenceItem]]):
     model_config = ConfigDict(strict=True)
 
 
+class NearestItem(StrictModel):
+    """Define one model-generated nearest judgement."""
+
+    pole: PoleName
+    text: Annotated[str, Field(min_length=1)]
+
+
 @dataclass(frozen=True)
 class TagResult:
     """Keep validated evidence, validation issues, and usage together."""
@@ -79,6 +87,72 @@ async def tag(
         issues=issues,
         token_usage=gemini.token_usage(response.usage_metadata),
     )
+
+
+async def nearest(
+    messages: Sequence[session.Message],
+    axis: AxisName,
+    session_id: str,
+) -> Nearest | None:
+    """Judge the nearest participant quote and pole for one empty axis."""
+    contents = json.dumps(
+        {
+            "transcript": session.serialize_transcript(messages),
+            "axis": axis,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    try:
+        response = await gemini.get_client().aio.models.generate_content(
+            model=get_settings().gemini_model,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=load_nearest_instruction(),
+                response_mime_type="application/json",
+                response_schema=NearestItem,
+            ),
+        )
+        item = NearestItem.model_validate_json(response.text)
+    except Exception as exc:
+        log_event(
+            "nearest_failed",
+            session_id=session_id,
+            axis=axis,
+            reason=type(exc).__name__,
+        )
+        return None
+
+    if item.pole not in AXIS_POLES[axis]:
+        log_event(
+            "nearest_failed",
+            session_id=session_id,
+            axis=axis,
+            reason="wrong_axis_pole",
+        )
+        return None
+
+    user_messages = report.participant_utterances(messages)
+    if not any(
+        report.quote_matches({"text": item.text, "turn": turn}, user_messages)
+        for turn in user_messages
+    ):
+        log_event(
+            "nearest_failed",
+            session_id=session_id,
+            axis=axis,
+            reason="quote_not_found",
+        )
+        return None
+
+    log_event(
+        "nearest_judged",
+        session_id=session_id,
+        axis=axis,
+        pole=item.pole,
+        token_usage=gemini.token_usage(response.usage_metadata),
+    )
+    return {"pole": item.pole, "text": item.text}
 
 
 async def _generate(contents: str) -> types.GenerateContentResponse:

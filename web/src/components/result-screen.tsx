@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Check, LoaderCircle, LockKeyhole } from "lucide-react";
+import { Check, LoaderCircle, LockKeyhole, TriangleAlert } from "lucide-react";
 
 import { AxisReasons } from "@/components/axis-reasons";
 import { AxisStrengths } from "@/components/axis-strengths";
@@ -188,6 +188,21 @@ function ResultNotice() {
       />
       <p className="text-[13px] leading-5 text-muted-foreground">
         새로고침하거나 화면을 벗어나면 이 화면을 다시 볼 수 없어요.
+      </p>
+    </div>
+  );
+}
+
+/** The result screens read as an ending, so each one before the submit says otherwise. */
+function PendingNotice() {
+  return (
+    <div className="flex gap-3 rounded-[20px] bg-card px-4 py-4">
+      <TriangleAlert
+        aria-hidden="true"
+        className="mt-0.5 size-4 shrink-0 text-incheon-blue"
+      />
+      <p className="text-[13px] leading-5 text-muted-foreground">
+        아직 제출되지 않았어요. 다음 화면에서 제출해야 인천시에 전달돼요.
       </p>
     </div>
   );
@@ -476,6 +491,20 @@ export function ResultScreen({
     generate();
   }, [generate]);
 
+  // An unsubmitted result dies with the tab, so closing or reloading asks first. The
+  // browser writes its own wording here; ours lives in PendingNotice.
+  useEffect(() => {
+    if (submissionId) return;
+
+    const confirmLeave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", confirmLeave);
+    return () => window.removeEventListener("beforeunload", confirmLeave);
+  }, [submissionId]);
+
   // The first step has no earlier step, and a submitted session no longer exists.
   useBackGuard(() => {
     if (submissionId) onReturn();
@@ -619,13 +648,11 @@ export function ResultScreen({
         actions={
           <Button
             className="h-14 flex-1 rounded-2xl text-[16px] font-bold"
-            disabled={cardAction !== null}
             onClick={() => setStep("report")}
           >
-            제출 전 요구 검토하기
+            제출하러 가기
           </Button>
         }
-        notice="다음 화면까지 확인해야 제출돼요"
       >
         <ResultHeader
           title={
@@ -636,12 +663,8 @@ export function ResultScreen({
         />
         <div className="space-y-10 px-5 pt-6 pb-8">
           <div className="space-y-4">
+            <PendingNotice />
             <CityTypeCard card={card} type={type} />
-            <ShareActions
-              action={cardAction}
-              onDownload={() => void download()}
-              onShare={() => void share()}
-            />
           </div>
           <div className="space-y-4">
             <TypeSummary type={type} />

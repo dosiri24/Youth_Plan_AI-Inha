@@ -55,6 +55,7 @@ class Session(TypedDict):
     messages: list[Message]
     evidence_log: list[Evidence]
     axis_hints: dict[str, list[int]]
+    closing_hint_sent: bool
     malicious_count: int
     status: Literal["active", "ended", "result_ready", "submitted"]
     type_result: TypeResult | None
@@ -84,6 +85,8 @@ def create_session(
         "messages": [],
         "evidence_log": [],
         "axis_hints": {},
+        # The closing hint is a real question, so it is sent once and never repeated.
+        "closing_hint_sent": False,
         "malicious_count": 0,
         "status": "active",
         "type_result": None,

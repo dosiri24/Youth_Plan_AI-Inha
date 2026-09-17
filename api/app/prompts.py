@@ -21,7 +21,22 @@ AXIS_HINT_TOPICS = {
 AXIS_HINT_OPENERS: dict[str, str] = {
     "FH": (
         "이 성질은 루브릭의 '지금 거기 있는 것' 질문으로 엶. 참여자가 직접 꺼낸 장소나 "
-        "참여자가 생기길 바란 시설의 자리를 대상으로 삼고, 대상이 없으면 미룸"
+        "참여자가 생기길 바란 시설의 자리를 대상으로 삼음"
+    ),
+}
+# A retry that reuses the first device reads as the same question; each axis gets a
+# second device drawn from scenes and questions the rubric already owns. AC and UN name
+# no fixed scene because the first attempt tends to pick that very scene on its own.
+AXIS_HINT_RETRY_OPENERS: dict[str, str] = {
+    "AC": "이번에는 루브릭 장면 목록에서 아직 열지 않은 장면 하나를 골라 엶",
+    "UN": "이번에는 루브릭 장면 목록에서 아직 열지 않은 장면 하나를 골라 엶",
+    "OW": (
+        "이번에는 루브릭의 '2045년에 일어나 있지 않았으면 하는 일' 질문으로 엶"
+        + "(아직 하지 않았다면)"
+    ),
+    "FH": (
+        "이번에는 루브릭의 '지금은 없는데 2045년에 생겨 있으면 하는 것' 질문으로 엶"
+        "(아직 하지 않았다면)"
     ),
 }
 PacingMode = Literal["continue", "extend", "closing"]
@@ -48,6 +63,13 @@ def load_prompt_assets() -> tuple[str, str]:
 def load_scoring_instruction() -> str:
     """Load and cache axes.md as the scoring system instruction."""
     return (_PROMPT_DIR / "axes.md").read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def load_nearest_instruction() -> str:
+    """Combine the scoring and nearest-judgement system instructions."""
+    nearest = (_PROMPT_DIR / "nearest.md").read_text(encoding="utf-8")
+    return f"{load_scoring_instruction()}\n\n{nearest}"
 
 
 @lru_cache
@@ -100,13 +122,16 @@ def build_operational_instruction(
 ) -> str:
     """Build one pacing and optional coverage instruction block."""
     if mode == "closing":
-        instructions = [_BEGIN_CLOSING]
-        if hint_axis:
+        if hint_axis is None:
+            instructions = [_BEGIN_CLOSING]
+        else:
             hint_topic = AXIS_HINT_TOPICS[hint_axis]
-            instructions.append(
-                "덧붙임을 물을 때 다음 성질의 이야기를 좀 더 듣고 싶다고 언급하고 "
-                f"그쪽도 열어 둘 것: {hint_topic}"
-            )
+            instructions = [
+                "정리 순서에 들어가기 전에, 이번 응답에서 다음 성질이 드러날 2045년의 장면 하나를 "
+                "마지막 질문으로 물을 것. 장면은 참여자가 세운 2045년의 무대 위에서 고르고, 방금 "
+                "답을 받는 문장으로 시작할 것. 그 답을 받은 다음 응답부터 인터뷰 루브릭에 설명된 "
+                f"정리 순서로 넘어갈 것: {hint_topic}"
+            ]
         return _format_operational_instruction(instructions)
 
     instructions = [_KEEP_GOING]
@@ -114,25 +139,20 @@ def build_operational_instruction(
         hint_topic = AXIS_HINT_TOPICS[hint_axis]
         if retry:
             instructions.append(
-                "다음 성질의 이야기를 앞서 물었으나 아직 나오지 않았음. 앞선 대화 맥락을 고려하여, "
-                "앞서 쓴 장면을 되풀이하지 말고 참여자가 이미 꺼낸 소재에 붙여 "
-                f"다른 장면으로 물을 것: {hint_topic}"
-            )
-        elif mode == "extend":
-            instructions.append(
-                "다음 성질의 이야기를 오늘 거의 듣지 못했음. 이번 응답에서는 그 성질이 드러날 "
-                "2045년의 장면을 하나 골라 물되, 장면은 참여자가 세운 2045년의 무대 위에서 "
-                f"고를 것: {hint_topic}"
+                "다음 성질의 이야기를 앞서 물었으나 아직 나오지 않았음. 방금 답을 받는 문장으로 "
+                "시작하고, 참여자가 이미 꺼낸 소재 위에서 앞서 쓴 것과 다른 장면 하나를 열어 "
+                f"물을 것: {hint_topic}"
             )
         else:
             instructions.append(
-                "다음 성질이 드러날 장면을 물을 기회를 찾을 것. 참여자가 방금 꺼낸 이야기나 "
-                "루브릭의 장면 목록에 붙일 수 있을 때만 이번 응답에서 그 장면을 열고, 붙일 데가 "
-                "없으면 참여자를 따라가고 이 성질은 다음 기회로 미룰 것. 성질의 문구를 질문에 "
-                "옮겨 적지 말 것"
-                f"(이미 그 이야기가 나왔다면 따르지 않아도 됨): {hint_topic}"
+                "이번 응답에서는 방금 답을 받는 문장으로 시작한 뒤, 그 답에서 이어지는 자리에 "
+                "다음 성질이 드러날 2045년의 장면 하나를 붙여 물을 것. 장면은 참여자가 세운 "
+                "2045년의 무대 위에서 고를 것. 방금 답에 뜻을 확인해야 할 뭉뚱그린 말이 있으면 "
+                "그 확인을 이번 응답에서 하고 이 장면은 다음 기회에 열 것: "
+                f"{hint_topic}"
             )
-        if opener := AXIS_HINT_OPENERS.get(hint_axis):
+        openers = AXIS_HINT_RETRY_OPENERS if retry else AXIS_HINT_OPENERS
+        if opener := openers.get(hint_axis):
             instructions.append(opener)
     return _format_operational_instruction(instructions)
 

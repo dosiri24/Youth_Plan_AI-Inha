@@ -42,6 +42,8 @@ export type AxisResult = {
   strength: number;
   /** True when nothing in the interview scored this axis, so 51 is a default, not a tie. */
   empty_axis: boolean;
+  /** Set on an empty axis whose letter came from the nearest-utterance judgement, not from evidence. */
+  nearest_quote: string | null;
 };
 
 export type TypeResult = {
@@ -204,7 +206,6 @@ async function* readEvents(response: Response): AsyncGenerator<InterviewEvent> {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let ended = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -217,8 +218,14 @@ async function* readEvents(response: Response): AsyncGenerator<InterviewEvent> {
       const event = parseFrame(frame);
 
       if (event) {
-        ended ||= event.type === "end";
         yield event;
+        if (event.type === "end") {
+          // The end event terminates the turn, so waiting for the body to close
+          // as well leaves in-app browsers holding a finished turn open. The
+          // cancellation cannot be awaited or reported: the turn already ended.
+          reader.cancel().catch(() => {});
+          return;
+        }
       }
 
       boundary = /\r?\n\r?\n/.exec(buffer);
@@ -228,14 +235,12 @@ async function* readEvents(response: Response): AsyncGenerator<InterviewEvent> {
   }
 
   const finalEvent = parseFrame(buffer);
-  if (finalEvent) {
-    ended ||= finalEvent.type === "end";
+  if (finalEvent?.type === "end") {
     yield finalEvent;
+    return;
   }
 
-  if (!ended) {
-    throw new Error("SSE stream ended without an end event");
-  }
+  throw new Error("SSE stream ended without an end event");
 }
 
 /** POST streams require fetch because EventSource cannot send this request shape. */

@@ -5,6 +5,7 @@
 *.pem
 CLAUDE.md
 .claude/
+interviews/
 2026 공모전 청사진 제안서.pdf
 
 # 도시기본계획 source PDF and its preprocessed derivatives.

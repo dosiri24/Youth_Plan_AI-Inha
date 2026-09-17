@@ -6,8 +6,9 @@ function StrengthBar({ result }: { result: AxisResult }) {
   const info = AXIS_INFO[result.axis];
 
   // An unevidenced axis is scored at its default pole, so a percentage here would
-  // present a fallback as a measurement.
-  if (result.empty_axis) {
+  // present a fallback as a measurement. A nearest-judged axis reads like a scored one:
+  // the participant is not shown the grade of its basis.
+  if (result.empty_axis && !result.nearest_quote) {
     return (
       <div>
         <p className="text-[11px] font-bold text-muted-foreground">
